@@ -1,0 +1,79 @@
+{
+  "name": "gitreleasemaster",
+  "displayName": "gitreleasemaster",
+  "description": "Helps to collect releases",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitreleasemaster.openUI",
+        "title": "Open Git Release Master",
+        "category": "Git Release Master"
+      }
+    ],
+    "configuration": {
+      "title": "Git Release Master",
+      "properties": {
+        "gitreleasemaster.releasePrefix": {
+          "type": "string",
+          "default": "release/",
+          "description": "Prefix used to filter release branches on the main screen."
+        },
+        "gitreleasemaster.theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "default": "dark",
+          "description": "UI theme for the Git Release Master webview."
+        },
+        "gitreleasemaster.language": {
+          "type": "string",
+          "enum": [
+            "ru",
+            "en"
+          ],
+          "default": "ru",
+          "description": "UI language for the Git Release Master webview."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build-webview && npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "build-webview": "cd webview-ui && npm run build",
+    "watch-webview": "cd webview-ui && npm run build -- --watch",
+    "dev": "concurrently \"npm run watch-webview\" \"npm run watch\"",
+    "build:all": "npm run build-webview && npm run compile",
+    "watch:all": "concurrently \"npm run watch\" \"npm run watch-webview\""
+  },
+  "dependencies": {
+    "simple-git": "^3.36.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "24.x",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
+    "concurrently": "^9.2.3",
+    "eslint": "^10.5.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  }
+}
