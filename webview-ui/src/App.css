@@ -1,1 +1,8 @@
 /* App-level styles. Most styling is handled via MUI + @emotion/styled. */
+@font-face {
+  font-family: "terminal-f4";
+  src: url("../fonts/Terminal_F4/Terminal_F4.ttf") format("truetype-variations");
+  font-weight: 100 800;
+  font-stretch: 75% 125%;
+  font-display: swap;
+}

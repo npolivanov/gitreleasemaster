@@ -1,12 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Box, CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { TopBar } from "./components/TopBar";
 import { HomeScreen } from "./screens/HomeScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
-import { useSettings } from "./hooks/useSettings";
-
-type View = "home" | "settings";
+import { useSettingsStore } from "./state-manager/useSettingsStore";
+import { useStoreInit } from "./state-manager/useStoreInit";
 
 const Shell = styled(Box)(() => ({
   minHeight: "100vh",
@@ -15,29 +14,32 @@ const Shell = styled(Box)(() => ({
 }));
 
 function App() {
-  const { settings, updateSettings } = useSettings();
-  const [view, setView] = useState<View>("home");
+  const { settings, updateSettings, view, setView } = useSettingsStore();
+
+  // Connect the store to the extension host (request + single subscription).
+  useStoreInit();
 
   const theme = useMemo(
     () =>
       createTheme({
         palette: {
           mode: settings.theme,
-          primary: { main: "#aa3bff" },
-          secondary: { main: "#5570ff" },
+          primary: { main: "#212121" },
+          secondary: { main: "#fafafa" },
           background: {
-            default: settings.theme === "dark" ? "#16171d" : "#f7f7fa",
-            paper: settings.theme === "dark" ? "#1c1d24" : "#ffffff",
+            default: settings.theme === "dark" ? "#212121" : "#fafafa",
+            paper: settings.theme === "dark" ? "#212121" : "#fafafa",
           },
         },
         shape: { borderRadius: 8 },
         typography: {
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          fontFamily: "Roboto, sans-serif",
         },
       }),
     [settings.theme],
   );
+
+  console.log("settings >>>", settings);
 
   return (
     <ThemeProvider theme={theme}>
@@ -50,7 +52,10 @@ function App() {
           onBackHome={() => setView("home")}
         />
         {view === "home" ? (
-          <HomeScreen language={settings.language} />
+          <HomeScreen
+            language={settings.language}
+            releasePrefix={settings.releasePrefix}
+          />
         ) : (
           <SettingsScreen
             language={settings.language}

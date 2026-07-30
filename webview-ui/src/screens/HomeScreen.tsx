@@ -48,7 +48,7 @@ const SearchField = styled(TextField)({
 });
 
 const BranchPaper = styled(Paper)(({ theme }) => ({
-  background: theme.palette.mode === "dark" ? "#1c1d24" : "#fff",
+  background: theme.palette.mode === "dark" ? "#212121" : "#fafafa",
   overflow: "hidden",
 }));
 
@@ -64,9 +64,10 @@ type SortKey = "newest" | "oldest";
 
 interface HomeScreenProps {
   language: Language;
+  releasePrefix: string;
 }
 
-export function HomeScreen({ language }: HomeScreenProps) {
+export function HomeScreen({ language, releasePrefix }: HomeScreenProps) {
   const { loading, result, refresh } = useBranches();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -136,11 +137,8 @@ export function HomeScreen({ language }: HomeScreenProps) {
           startIcon={<AddIcon />}
           onClick={handleCreate}
           sx={{
-            borderRadius: 2,
             textTransform: "none",
-            background: "linear-gradient(90deg, #aa3bff, #5570ff)",
             boxShadow: "none",
-            "&:hover": { boxShadow: "none", opacity: 0.92 },
           }}
         >
           {t(language, "createRelease")}
@@ -172,7 +170,9 @@ export function HomeScreen({ language }: HomeScreenProps) {
         ) : visible.length === 0 ? (
           <EmptyState>
             <Typography variant="body2">
-              {query ? t(language, "emptyNoMatch") : t(language, "emptyNoBranches")}
+              {query
+                ? t(language, "emptyNoMatch")
+                : t(language, "emptyNoBranches")}
             </Typography>
           </EmptyState>
         ) : (
@@ -211,31 +211,18 @@ function BranchRow({ branch, language }: BranchRowProps) {
         "&:hover": { background: "action.hover" },
       }}
     >
-      <ListItemAvatar>
-        <Avatar
-          sx={{
-            width: 36,
-            height: 36,
-            bgcolor: "transparent",
-            color: "text.secondary",
-            border: (theme) => `1px solid ${theme.palette.divider}`,
-            fontSize: 14,
-            fontFamily: "ui-monospace, monospace",
-          }}
-        >
-          {branch.sha.slice(0, 2).toUpperCase()}
-        </Avatar>
-      </ListItemAvatar>
       <ListItemText
         primary={
-          <Typography variant="body2" sx={{ fontFamily: "ui-monospace, monospace" }}>
+          <Typography
+            variant="body2"
+            sx={{ fontFamily: "ui-monospace, monospace" }}
+          >
             {branch.name}
           </Typography>
         }
         secondary={
           <Typography variant="caption" color="text.secondary">
-            {t(language, "author")}: {branch.author} · {t(language, "sha")}:{" "}
-            {branch.sha.slice(0, 7)} · {dateLabel}
+            · {t(language, "sha")}: {branch.sha.slice(0, 7)} · {dateLabel}
           </Typography>
         }
       />

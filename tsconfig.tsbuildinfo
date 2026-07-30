@@ -1,0 +1,1 @@
+{"root":["./src/extension.ts","./src/git.ts","./src/host/branches.ts","./src/host/messagerouter.ts","./src/host/messages.ts","./src/host/settings.ts","./src/host/webviewhtml.ts","./src/host/commands/handlecreaterelease.ts","./src/host/commands/handlegetbranches.ts","./src/host/commands/handlegetsettings.ts","./src/host/commands/handleupdatesettings.ts"],"version":"6.0.3"}

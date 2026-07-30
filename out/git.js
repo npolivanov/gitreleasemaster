@@ -77,7 +77,11 @@ async function listReleaseBranches(cwd, prefix) {
     const safePrefix = prefix.endsWith("/") ? prefix : `${prefix}/`;
     let summary;
     try {
-        summary = await git.branch(["--list", `${safePrefix}*`, "--sort=-committerdate"]);
+        summary = await git.branch([
+            "--list",
+            `${safePrefix}*`,
+            "--sort=-committerdate",
+        ]);
     }
     catch (err) {
         return {
@@ -115,7 +119,8 @@ async function listReleaseBranches(cwd, prefix) {
     }
     // `git branch --sort` already orders them, but enforce a stable order in
     // case the underlying sort is unstable across platforms.
-    branches.sort((a, b) => new Date(b.lastCommitDate).getTime() - new Date(a.lastCommitDate).getTime());
+    branches.sort((a, b) => new Date(b.lastCommitDate).getTime() -
+        new Date(a.lastCommitDate).getTime());
     return { ok: true, branches };
 }
 //# sourceMappingURL=git.js.map

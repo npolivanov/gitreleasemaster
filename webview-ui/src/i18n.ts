@@ -4,7 +4,7 @@ import type { Language } from "./types";
 type Dictionary = Record<string, string>;
 
 const ru: Dictionary = {
-  appTitle: "Git Release Master",
+  appTitle: "GIT_RELEASE_MASTER",
   appSubtitle: "Управление релизными ветками",
   search: "Поиск по названию ветки…",
   sortNewest: "Сначала новые",
@@ -39,7 +39,7 @@ const ru: Dictionary = {
 };
 
 const en: Dictionary = {
-  appTitle: "Git Release Master",
+  appTitle: "GIT_RELEASE_MASTER",
   appSubtitle: "Manage your release branches",
   search: "Search branches…",
   sortNewest: "Newest first",

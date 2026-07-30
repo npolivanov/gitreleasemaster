@@ -61,12 +61,7 @@ export function SettingsScreen({
   return (
     <Page>
       <Box>
-        <Tabs
-          value={tab}
-          onChange={(_, value) => setTab(value as 0 | 1)}
-          textColor="primary"
-          indicatorColor="primary"
-        >
+        <Tabs value={tab} onChange={(_, value) => setTab(value as 0 | 1)}>
           <Tab label={t(language, "tabGeneral")} />
           <Tab label={t(language, "tabJson")} />
         </Tabs>
@@ -105,7 +100,9 @@ function GeneralTab({ language, settings, updateSettings }: GeneralTabProps) {
           fullWidth
           size="small"
           value={settings.releasePrefix}
-          onChange={(e) => updateSettings({ releasePrefix: e.target.value })}
+          onChange={(e) => {
+            updateSettings({ releasePrefix: e.target.value });
+          }}
           placeholder="release/"
         />
         <FieldHelp>{t(language, "releasePrefixHelp")}</FieldHelp>

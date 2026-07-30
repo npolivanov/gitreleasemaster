@@ -37,67 +37,19 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
-const fs = __importStar(require("fs"));
-const git_1 = require("./git");
-/** Configuration section exposed via `contributes.configuration`. */
-const CONFIG_SECTION = "gitreleasemaster";
+const webviewHtml_1 = require("./host/webviewHtml");
+const messageRouter_1 = require("./host/messageRouter");
+const branches_1 = require("./host/branches");
+const settings_1 = require("./host/settings");
+/**
+ * Точка входа расширения.
+ *
+ * Регистрирует команду открытия панели, статус-бар и настраивает связь
+ * с вебвуем. Вся логика обработки команд вынесена в `./host/` — здесь только
+ * оркестрация: создание панели, маршрутизация сообщений и подписки.
+ */
 function activate(context) {
-    const openUiCommand = vscode.commands.registerCommand("gitreleasemaster.openUI", () => {
-        const panel = vscode.window.createWebviewPanel("gitReleaseMasterPanel", "Git Release Master", vscode.ViewColumn.One, {
-            enableScripts: true,
-            localResourceRoots: [
-                vscode.Uri.file(path.join(context.extensionPath, "dist", "webview")),
-            ],
-        });
-        panel.webview.html = getWebviewContent(panel.webview, context.extensionPath);
-        const messageDisposable = panel.webview.onDidReceiveMessage(async (message) => {
-            switch (message.command) {
-                case "getBranches":
-                case "refreshBranches": {
-                    const result = await safeListBranches();
-                    panel.webview.postMessage({
-                        command: "branchesUpdated",
-                        data: result,
-                    });
-                    return;
-                }
-                case "getSettings": {
-                    panel.webview.postMessage({
-                        command: "settingsUpdated",
-                        data: readSettings(),
-                    });
-                    return;
-                }
-                case "updateSettings": {
-                    await applySettings(message.data);
-                    // Broadcast the canonical (post-update) snapshot so every tab
-                    // (General + JSON) renders the same values.
-                    panel.webview.postMessage({
-                        command: "settingsUpdated",
-                        data: readSettings(),
-                    });
-                    return;
-                }
-                case "noopCreateRelease": {
-                    vscode.window.showInformationMessage("Создание релиза пока не реализовано (NOOP).");
-                    return;
-                }
-            }
-        }, undefined, context.subscriptions);
-        // Keep the webview in sync if settings are changed from VS Code's UI.
-        const configDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration(CONFIG_SECTION)) {
-                panel.webview.postMessage({
-                    command: "settingsUpdated",
-                    data: readSettings(),
-                });
-            }
-        }, undefined, context.subscriptions);
-        panel.onDidDispose(() => {
-            messageDisposable.dispose();
-            configDisposable.dispose();
-        }, null, context.subscriptions);
-    });
+    const openUiCommand = vscode.commands.registerCommand("gitreleasemaster.openUI", () => openWebviewPanel(context));
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     statusBarItem.text = "$(package) Git Release Master";
     statusBarItem.tooltip = "Открыть Git Release Master";
@@ -105,46 +57,52 @@ function activate(context) {
     statusBarItem.show();
     context.subscriptions.push(openUiCommand, statusBarItem);
 }
-/** Read all settings under our config section. */
-function readSettings() {
-    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-    return {
-        releasePrefix: config.get("releasePrefix", "release/"),
-        theme: config.get("theme", "dark"),
-        language: config.get("language", "ru"),
-    };
-}
-/** Persist a partial settings update at the Global (user) target. */
-async function applySettings(patch) {
-    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-    await Promise.all(Object.entries(patch).map(([key, value]) => config.update(`${CONFIG_SECTION}.${key}`, value, vscode.ConfigurationTarget.Global)));
-}
-/** Wrap git access with friendly error handling. */
-async function safeListBranches() {
-    const cwd = (0, git_1.getWorkspaceCwd)();
-    if (!cwd) {
-        return {
-            ok: false,
-            reason: "no-folder",
-            message: "Open a folder that contains a Git repository.",
-        };
-    }
-    const { releasePrefix } = readSettings();
-    return (0, git_1.listReleaseBranches)(cwd, releasePrefix);
-}
-function getWebviewContent(webview, extensionPath) {
-    const webviewPath = path.join(extensionPath, "dist", "webview");
-    const indexPath = path.join(webviewPath, "index.html");
-    if (!fs.existsSync(indexPath)) {
-        return `<h1 style="color: red; padding: 20px; font-family: sans-serif;">Ошибка: сборка не найдена. Запустите 'npm run build-webview'.</h1>`;
-    }
-    let html = fs.readFileSync(indexPath, "utf-8");
-    // Rewrite relative asset URLs so they resolve through the webview URI scheme.
-    html = html.replace(/(href|src)="\.\/([^"]+)"/g, (_, attr, filePath) => {
-        const fileUri = webview.asWebviewUri(vscode.Uri.joinPath(vscode.Uri.file(webviewPath), filePath));
-        return `${attr}="${fileUri}"`;
+/**
+ * Создать и настроить панель вебвюя: загрузить HTML, подключить обработчик
+ * входящих сообщений и подписку на внешние изменения настроек.
+ */
+function openWebviewPanel(context) {
+    const panel = vscode.window.createWebviewPanel("gitReleaseMasterPanel", "Git Release Master", vscode.ViewColumn.One, {
+        enableScripts: true,
+        localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, "dist", "webview")),
+        ],
     });
-    return html;
+    panel.webview.html = (0, webviewHtml_1.getWebviewContent)(panel.webview, context.extensionPath);
+    // Запросить свежий список веток и отправить его в вебвюй как branchesUpdated.
+    const refreshBranches = async () => {
+        panel.webview.postMessage({
+            command: "branchesUpdated",
+            data: await (0, branches_1.safeListBranches)(),
+        });
+    };
+    // Зависимости обработчиков: панель, контекст и колбэк обновления веток.
+    const deps = { panel, context, refreshBranches };
+    // Маршрутизация входящих сообщений от вебвюя.
+    const messageDisposable = panel.webview.onDidReceiveMessage(async (message) => {
+        await (0, messageRouter_1.dispatchCommand)(message, deps);
+    }, undefined, context.subscriptions);
+    // Держать вебвуй в синхроне при изменении настроек через UI самого VS Code.
+    const configDisposable = vscode.workspace.onDidChangeConfiguration(async (e) => {
+        if (!e.affectsConfiguration(settings_1.CONFIG_SECTION)) {
+            return;
+        }
+        const settings = (0, settings_1.readSettings)();
+        // Зеркалим внешние изменения в кэш, чтобы он не устаревал.
+        await (0, settings_1.cacheSettings)(context, settings);
+        panel.webview.postMessage({
+            command: "settingsUpdated",
+            data: settings,
+        });
+        // Если сменился префикс — обновляем ветки и здесь.
+        // (внешний путь меняет конфиг напрямую, поэтому сравнивать не с чем —
+        // просто перевызываем, как и при редактировании из вебвюя)
+        await refreshBranches();
+    }, undefined, context.subscriptions);
+    panel.onDidDispose(() => {
+        messageDisposable.dispose();
+        configDisposable.dispose();
+    }, null, context.subscriptions);
 }
 function deactivate() { }
 //# sourceMappingURL=extension.js.map

@@ -1,0 +1,1 @@
+{"version":3,"file":"handleGetSettings.js","sourceRoot":"","sources":["../../../src/host/commands/handleGetSettings.ts"],"names":[],"mappings":";;AAUA,8CAKC;AAfD,0CAAiD;AAGjD;;;;;;GAMG;AACI,KAAK,UAAU,iBAAiB,CAAC,IAAiB;IACvD,IAAI,CAAC,KAAK,CAAC,OAAO,CAAC,WAAW,CAAC;QAC7B,OAAO,EAAE,iBAAiB;QAC1B,IAAI,EAAE,IAAA,6BAAkB,EAAC,IAAI,CAAC,OAAO,CAAC;KACvC,CAAC,CAAC;AACL,CAAC"}

@@ -33,16 +33,15 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-const assert = __importStar(require("assert"));
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
+exports.handleCreateRelease = handleCreateRelease;
 const vscode = __importStar(require("vscode"));
-// import * as myExtension from '../../extension';
-suite('Extension Test Suite', () => {
-    vscode.window.showInformationMessage('Start all tests.');
-    test('Sample test', () => {
-        assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-        assert.strictEqual(-1, [1, 2, 3].indexOf(0));
-    });
-});
-//# sourceMappingURL=extension.test.js.map
+/**
+ * Обработчик команды `noopCreateRelease`.
+ *
+ * Заглушка создания релиза: пока функциональность не реализована, показываем
+ * пользователю информационное сообщение.
+ */
+async function handleCreateRelease(_deps) {
+    await vscode.window.showInformationMessage("Создание релиза пока не реализовано (NOOP).");
+}
+//# sourceMappingURL=handleCreateRelease.js.map

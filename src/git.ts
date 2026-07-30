@@ -14,7 +14,11 @@ export interface BranchInfo {
 
 export type ListBranchesResult =
   | { ok: true; branches: BranchInfo[] }
-  | { ok: false; reason: "no-folder" | "not-a-repo" | "git-error"; message: string };
+  | {
+      ok: false;
+      reason: "no-folder" | "not-a-repo" | "git-error";
+      message: string;
+    };
 
 /**
  * Resolve the working directory that git commands should run in.
@@ -58,7 +62,11 @@ export async function listReleaseBranches(
   const safePrefix = prefix.endsWith("/") ? prefix : `${prefix}/`;
   let summary;
   try {
-    summary = await git.branch(["--list", `${safePrefix}*`, "--sort=-committerdate"]);
+    summary = await git.branch([
+      "--list",
+      `${safePrefix}*`,
+      "--sort=-committerdate",
+    ]);
   } catch (err) {
     return {
       ok: false,
@@ -99,7 +107,8 @@ export async function listReleaseBranches(
   // case the underlying sort is unstable across platforms.
   branches.sort(
     (a, b) =>
-      new Date(b.lastCommitDate).getTime() - new Date(a.lastCommitDate).getTime(),
+      new Date(b.lastCommitDate).getTime() -
+      new Date(a.lastCommitDate).getTime(),
   );
 
   return { ok: true, branches };
