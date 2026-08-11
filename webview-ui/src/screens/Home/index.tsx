@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react";
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   IconButton,
   InputAdornment,
   List,
   ListItem,
-  ListItemAvatar,
   ListItemText,
   MenuItem,
   Paper,
@@ -23,10 +21,10 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import AddIcon from "@mui/icons-material/Add";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import { styled } from "@mui/material/styles";
-import type { BranchInfo, Language } from "../types";
-import { useBranches } from "../hooks/useBranches";
-import { postMessage } from "../vscode";
-import { t } from "../i18n";
+import type { BranchInfo, Language } from "../../types";
+import { useBranches } from "./hooks/useBranches";
+import { useSettingsStore } from "../../state-manager/useSettingsStore";
+import { t } from "../../i18n";
 
 const Page = styled(Box)(({ theme }) => ({
   padding: theme.spacing(3),
@@ -69,6 +67,7 @@ interface HomeScreenProps {
 
 export function HomeScreen({ language, releasePrefix }: HomeScreenProps) {
   const { loading, result, refresh } = useBranches();
+  const { setView } = useSettingsStore();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
 
@@ -87,7 +86,7 @@ export function HomeScreen({ language, releasePrefix }: HomeScreenProps) {
     return sorted;
   }, [result, query, sort]);
 
-  const handleCreate = () => postMessage({ command: "noopCreateRelease" });
+  const handleCreate = () => setView("createRelease");
 
   return (
     <Page>

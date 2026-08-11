@@ -1,11 +1,12 @@
 import type * as vscode from "vscode";
 import type { Settings } from "./settings";
-import type { ListBranchesResult } from "../git";
+import type { ListBranchesResult, BranchSearchResult } from "../git";
 
 /** Сообщения, приходящие от вебвюя (входящие команды). */
 export type InboundMessage =
   | { command: "getBranches" }
   | { command: "refreshBranches" }
+  | { command: "getAllBranches" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -13,6 +14,7 @@ export type InboundMessage =
 /** Сообщения, отправляемые вебвюю (исходящие события). */
 export type OutboundMessage =
   | { command: "branchesUpdated"; data: ListBranchesResult }
+  | { command: "allBranchesLoaded"; data: BranchSearchResult }
   | { command: "settingsUpdated"; data: Settings };
 
 /**

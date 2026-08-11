@@ -15,8 +15,8 @@ import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { styled } from "@mui/material/styles";
 import ReactJson from "@microlink/react-json-view";
-import type { Language, Settings, ThemeMode } from "../types";
-import { t } from "../i18n";
+import type { Language, Settings, ThemeMode } from "../../types";
+import { t } from "../../i18n";
 
 const Page = styled(Box)(({ theme }) => ({
   padding: theme.spacing(3),

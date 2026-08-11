@@ -38,6 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getWorkspaceCwd = getWorkspaceCwd;
 exports.listReleaseBranches = listReleaseBranches;
+exports.listAllBranches = listAllBranches;
 const simple_git_1 = __importDefault(require("simple-git"));
 const vscode = __importStar(require("vscode"));
 /**
@@ -122,5 +123,48 @@ async function listReleaseBranches(cwd, prefix) {
     branches.sort((a, b) => new Date(b.lastCommitDate).getTime() -
         new Date(a.lastCommitDate).getTime());
     return { ok: true, branches };
+}
+/**
+ * Список ВСЕХ веток репозитория (без префиксного фильтра и без поиска по подстроке).
+ *
+ * Загружается один раз при открытии SelectBranch и кэшируется на стороне
+ * webview; дальнейший поиск/фильтрация идут клиентски — мгновенно, без
+ * round-trip через postMessage при каждом нажатии клавиши.
+ *
+ * Поля — только `name` + `sha` (из summary.branches), без отдельных `git.log`
+ * вызовов на каждую ветку.
+ */
+async function listAllBranches(cwd) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            ok: false,
+            query: "",
+            reason: "not-a-repo",
+            message: "The open folder is not a Git repository.",
+        };
+    }
+    // `git branch --sort=-committerdate` — один вызов, без `--list`.
+    let summary;
+    try {
+        summary = await git.branch(["--sort=-committerdate"]);
+    }
+    catch (err) {
+        return {
+            ok: false,
+            query: "",
+            reason: "git-error",
+            message: err instanceof Error ? err.message : String(err),
+        };
+    }
+    const branches = Object.entries(summary.branches).map(([name, meta]) => ({ name, sha: meta.commit }));
+    return { ok: true, query: "", branches };
 }
 //# sourceMappingURL=git.js.map

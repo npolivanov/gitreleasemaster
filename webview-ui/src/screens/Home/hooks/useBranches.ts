@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ListBranchesResult } from "../types";
-import { onMessage, postMessage } from "../vscode";
+import type { ListBranchesResult } from "../../../types";
+import { onMessage, postMessage } from "../../../vscode";
 
 interface BranchesState {
   loading: boolean;

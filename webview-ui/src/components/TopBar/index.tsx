@@ -2,8 +2,9 @@ import { IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { styled } from "@mui/material/styles";
-import type { Language } from "../types";
-import { t } from "../i18n";
+import type { Language } from "../../types";
+import type { View } from "../../state-manager/store";
+import { t } from "../../i18n";
 
 const Root = styled(Stack)(({ theme }) => ({
   flexDirection: "row",
@@ -21,7 +22,7 @@ const Title = styled(Typography)`
 
 interface TopBarProps {
   language: Language;
-  view: "home" | "settings";
+  view: View;
   onOpenSettings: () => void;
   onBackHome: () => void;
 }
@@ -33,10 +34,11 @@ export function TopBar({
   onOpenSettings,
   onBackHome,
 }: TopBarProps) {
+  const showBack = view !== "home";
   return (
     <Root>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        {view === "settings" && (
+        {showBack && (
           <Tooltip title={t(language, "back")}>
             <IconButton size="small" onClick={onBackHome}>
               <ArrowBackIcon fontSize="small" />

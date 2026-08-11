@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS: Settings = {
   language: "ru",
 };
 
-type View = "home" | "settings";
+export type View = "home" | "settings" | "createRelease";
 
 /**
  * Central application store.

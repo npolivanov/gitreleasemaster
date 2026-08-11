@@ -2,8 +2,7 @@ import { useMemo } from "react";
 import { Box, CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { TopBar } from "./components/TopBar";
-import { HomeScreen } from "./screens/HomeScreen";
-import { SettingsScreen } from "./screens/SettingsScreen";
+import { ScreenRouter } from "./screens/ScreenRouter";
 import { useSettingsStore } from "./state-manager/useSettingsStore";
 import { useStoreInit } from "./state-manager/useStoreInit";
 
@@ -39,8 +38,6 @@ function App() {
     [settings.theme],
   );
 
-  console.log("settings >>>", settings);
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -51,19 +48,7 @@ function App() {
           onOpenSettings={() => setView("settings")}
           onBackHome={() => setView("home")}
         />
-        {view === "home" ? (
-          <HomeScreen
-            language={settings.language}
-            releasePrefix={settings.releasePrefix}
-          />
-        ) : (
-          <SettingsScreen
-            language={settings.language}
-            settings={settings}
-            updateSettings={updateSettings}
-            themeMode={settings.theme}
-          />
-        )}
+        <ScreenRouter settings={settings} updateSettings={updateSettings} />
       </Shell>
     </ThemeProvider>
   );

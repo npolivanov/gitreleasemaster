@@ -59,6 +59,7 @@
     "watch:all": "concurrently \"npm run watch\" \"npm run watch-webview\""
   },
   "dependencies": {
+    "react-hook-form": "^7.84.0",
     "simple-git": "^3.36.0"
   },
   "devDependencies": {

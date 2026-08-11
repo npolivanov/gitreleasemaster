@@ -18,6 +18,24 @@ export type ListBranchesResult =
       message: string;
     };
 
+/** Минимальная инфа о ветке — используется в результатах поиска. */
+export type BranchOption = Pick<BranchInfo, "name" | "sha">;
+
+/**
+ * Результат поиска веток по подстроке во всём репозитории.
+ *
+ * `query` — эхо запроса, чтобы webview мог отсеять устаревшие ответы
+ * (пользователь мог успеть напечатать что-то новое, пока хост отвечал).
+ */
+export type BranchSearchResult =
+  | { ok: true; query: string; branches: BranchOption[] }
+  | {
+      ok: false;
+      query: string;
+      reason: "no-folder" | "not-a-repo" | "git-error";
+      message: string;
+    };
+
 export type ThemeMode = "dark" | "light";
 export type Language = "ru" | "en";
 
@@ -31,6 +49,7 @@ export interface Settings {
 export type OutboundMessage =
   | { command: "getBranches" }
   | { command: "refreshBranches" }
+  | { command: "getAllBranches" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -38,4 +57,5 @@ export type OutboundMessage =
 /** Messages sent from the extension host to the webview. */
 export type InboundMessage =
   | { command: "branchesUpdated"; data: ListBranchesResult }
+  | { command: "allBranchesLoaded"; data: BranchSearchResult }
   | { command: "settingsUpdated"; data: Settings };
