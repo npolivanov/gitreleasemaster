@@ -4,6 +4,8 @@ import { handleGetSettings } from "./commands/handleGetSettings";
 import { handleUpdateSettings } from "./commands/handleUpdateSettings";
 import { handleCreateRelease } from "./commands/handleCreateRelease";
 import { handleGetAllBranches } from "./commands/handleGetAllBranches";
+import { handleCreateReleaseBranch } from "./commands/handleCreateReleaseBranch";
+import { handleUseSourceBranch } from "./commands/handleUseSourceBranch";
 
 /**
  * Маршрутизатор входящих сообщений от вебвюя.
@@ -23,6 +25,14 @@ export async function dispatchCommand(
 
     case "getAllBranches":
       await handleGetAllBranches(deps);
+      return;
+
+    case "createReleaseBranch":
+      await handleCreateReleaseBranch(message, deps);
+      return;
+
+    case "useSourceBranch":
+      await handleUseSourceBranch(message, deps);
       return;
 
     case "getSettings":

@@ -1,71 +1,32 @@
-import { Box, Typography, Stack, Divider } from "@mui/material";
-import { styled } from "@mui/material/styles";
-import { useFieldArray, useForm } from "react-hook-form";
-import { UnstagedCommitsList } from "./unstaged";
-
-const StackWrapper = styled(Stack)`
-  width: 100%;
-`;
-const Item = styled("div")`
-  width: 50%;
-`;
-
-/** One entry in the commits list — a single string field (SHA or message). */
-export interface CommitItem {
-  value: string;
-}
-
-/** Shape of the whole create-release form. */
-export interface CreateReleaseFormValues {
-  commits: CommitItem[];
-  isDeleted: boolean;
-  addFormBranch: string;
-}
+import { useCallback, useState } from "react";
+import { Step1CreateBranch } from "./step-1-create-branch";
+import { Step2Commits } from "./step-2-commits";
+import type { ReleaseContext } from "./types";
 
 /**
- * Release creation screen.
+ * Экран создания релиза — двухшаговый wizard.
  *
- * Owns the form state: `useForm` + `useFieldArray` live here, while the
- * rendering of each row is delegated to `UnstagedCommitsList`.
+ * Шаг 1: форма выбора ветки-источника и названия релиза; по «Далее» хост
+ *        создаёт ветку `releasePrefix + releaseName` и переключается на неё.
+ * Шаг 2: список коммитов и контролы релиза (существующий UI).
+ *
+ * Владелец состояния шага — `CreateReleaseScreen`. Контекст созданной ветки
+ * сохраняется в `releaseCtx` и передаётся в Шаг 2.
  */
 export function CreateReleaseScreen() {
-  const { control, register, handleSubmit } = useForm<CreateReleaseFormValues>({
-    defaultValues: {
-      commits: [{ value: "" }],
-      isDeleted: false,
-      addFormBranch: "",
-    },
-  });
+  const [step, setStep] = useState<1 | 2>(1);
+  const [releaseCtx, setReleaseCtx] = useState<ReleaseContext | null>(null);
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "commits",
-  });
+  // Стабильная ссылка — чтобы в Step1 подписка onMessage не пересоздавалась
+  // при каждом рендере (иначе возможна гонка при асинхронном ответе хоста).
+  const handleCreated = useCallback((ctx: ReleaseContext) => {
+    setReleaseCtx(ctx);
+    setStep(2);
+  }, []);
 
-  const handleAdd = () => append({ value: "" });
+  if (step === 1) {
+    return <Step1CreateBranch onCreated={handleCreated} />;
+  }
 
-  const onSubmit = (data: CreateReleaseFormValues) => {
-    console.log(data);
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <StackWrapper
-        direction="row"
-        divider={<Divider orientation="vertical" flexItem />}
-      >
-        <Item>
-          <UnstagedCommitsList
-            fields={fields}
-            register={register}
-            remove={remove}
-            canRemove={fields.length > 1}
-            add={handleAdd}
-            control={control}
-          />
-        </Item>
-        <Item>234234234234234</Item>
-      </StackWrapper>
-    </form>
-  );
+  return <Step2Commits releaseCtx={releaseCtx} />;
 }

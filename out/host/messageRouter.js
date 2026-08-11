@@ -6,6 +6,8 @@ const handleGetSettings_1 = require("./commands/handleGetSettings");
 const handleUpdateSettings_1 = require("./commands/handleUpdateSettings");
 const handleCreateRelease_1 = require("./commands/handleCreateRelease");
 const handleGetAllBranches_1 = require("./commands/handleGetAllBranches");
+const handleCreateReleaseBranch_1 = require("./commands/handleCreateReleaseBranch");
+const handleUseSourceBranch_1 = require("./commands/handleUseSourceBranch");
 /**
  * Маршрутизатор входящих сообщений от вебвюя.
  *
@@ -20,6 +22,12 @@ async function dispatchCommand(message, deps) {
             return;
         case "getAllBranches":
             await (0, handleGetAllBranches_1.handleGetAllBranches)(deps);
+            return;
+        case "createReleaseBranch":
+            await (0, handleCreateReleaseBranch_1.handleCreateReleaseBranch)(message, deps);
+            return;
+        case "useSourceBranch":
+            await (0, handleUseSourceBranch_1.handleUseSourceBranch)(message, deps);
             return;
         case "getSettings":
             await (0, handleGetSettings_1.handleGetSettings)(deps);

@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.safeListBranches = safeListBranches;
 exports.safeListAllBranches = safeListAllBranches;
+exports.safeCreateReleaseBranch = safeCreateReleaseBranch;
+exports.safeUseSourceBranch = safeUseSourceBranch;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
 /**
@@ -40,5 +42,45 @@ async function safeListAllBranches() {
         };
     }
     return (0, git_1.listAllBranches)(cwd);
+}
+/**
+ * Создать релизную ветку от `fromBranch` с именем `releasePrefix + releaseName`.
+ *
+ * Префикс берётся из настроек расширения (единый источник правды) и
+ * нормализуется — гарантируется ровно один `/` между префиксом и названием.
+ * Если папка не открыта — возвращаем понятную ошибку.
+ */
+async function safeCreateReleaseBranch(fromBranch, releaseName) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            reason: "git-error",
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    const { releasePrefix } = (0, settings_1.readSettings)();
+    const cleanPrefix = releasePrefix.endsWith("/")
+        ? releasePrefix
+        : `${releasePrefix}/`;
+    const fullBranchName = `${cleanPrefix}${releaseName}`;
+    return (0, git_1.createReleaseBranch)(cwd, fromBranch, fullBranchName);
+}
+/**
+ * Переключиться на существующую ветку `fromBranch` (без создания новой).
+ *
+ * Используется для режима «Использовать ветку-источник как основную».
+ * Если папка не открыта — возвращаем понятную ошибку.
+ */
+async function safeUseSourceBranch(fromBranch) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            reason: "git-error",
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.checkoutExistingBranch)(cwd, fromBranch);
 }
 //# sourceMappingURL=branches.js.map

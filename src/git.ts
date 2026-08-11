@@ -181,3 +181,91 @@ export async function listAllBranches(
 
   return { ok: true, query: "", branches };
 }
+
+/** Результат создания релизной ветки. */
+export type CreateBranchResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "not-a-repo" | "git-error" | "already-exists";
+      message: string;
+    };
+
+/**
+ * Создать новую ветку `fullBranchName` от `fromBranch` и переключиться на неё.
+ *
+ * Эквивалент `git checkout -b fullBranchName fromBranch`: создаёт ветку и
+ * делает её активной одним вызовом. Если ветка уже существует — git падает с
+ * сообщением «already exists», которое мы нормализуем в `reason: "already-exists"`.
+ */
+export async function createReleaseBranch(
+  cwd: string,
+  fromBranch: string,
+  fullBranchName: string,
+): Promise<CreateBranchResult> {
+  const git = simpleGit({ baseDir: cwd });
+
+  let isRepo = false;
+  try {
+    isRepo = await git.checkIsRepo();
+  } catch {
+    // ignore — treat as not-a-repo
+  }
+  if (!isRepo) {
+    return {
+      ok: false,
+      reason: "not-a-repo",
+      message: "The open folder is not a Git repository.",
+    };
+  }
+
+  try {
+    // `git checkout -b fullBranchName fromBranch` — создать и переключиться.
+    await git.checkoutBranch(fullBranchName, fromBranch);
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const reason: "already-exists" | "git-error" = /already exists/i.test(
+      message,
+    )
+      ? "already-exists"
+      : "git-error";
+    return { ok: false, reason, message };
+  }
+}
+
+/**
+ * Переключиться на существующую локальную ветку `branchName`.
+ *
+ * Эквивалент `git checkout branchName` — без создания новой ветки.
+ * Используется, когда пользователь выбрал «Использовать ветку-источник как
+ * основную» и создавать релизную ветку не нужно.
+ */
+export async function checkoutExistingBranch(
+  cwd: string,
+  branchName: string,
+): Promise<CreateBranchResult> {
+  const git = simpleGit({ baseDir: cwd });
+
+  let isRepo = false;
+  try {
+    isRepo = await git.checkIsRepo();
+  } catch {
+    // ignore — treat as not-a-repo
+  }
+  if (!isRepo) {
+    return {
+      ok: false,
+      reason: "not-a-repo",
+      message: "The open folder is not a Git repository.",
+    };
+  }
+
+  try {
+    await git.checkout(branchName);
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "git-error", message };
+  }
+}

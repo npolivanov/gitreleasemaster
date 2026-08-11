@@ -13,7 +13,7 @@ import {
   type FieldArrayWithId,
   type UseFormRegister,
 } from "react-hook-form";
-import type { CreateReleaseFormValues } from "../CreateRelease";
+import type { CreateReleaseFormValues } from "../types";
 import AddIcon from "@mui/icons-material/Add";
 import { ControlMenu } from "./control-menu/control-menu";
 

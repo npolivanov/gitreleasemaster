@@ -39,6 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getWorkspaceCwd = getWorkspaceCwd;
 exports.listReleaseBranches = listReleaseBranches;
 exports.listAllBranches = listAllBranches;
+exports.createReleaseBranch = createReleaseBranch;
+exports.checkoutExistingBranch = checkoutExistingBranch;
 const simple_git_1 = __importDefault(require("simple-git"));
 const vscode = __importStar(require("vscode"));
 /**
@@ -166,5 +168,73 @@ async function listAllBranches(cwd) {
     }
     const branches = Object.entries(summary.branches).map(([name, meta]) => ({ name, sha: meta.commit }));
     return { ok: true, query: "", branches };
+}
+/**
+ * Создать новую ветку `fullBranchName` от `fromBranch` и переключиться на неё.
+ *
+ * Эквивалент `git checkout -b fullBranchName fromBranch`: создаёт ветку и
+ * делает её активной одним вызовом. Если ветка уже существует — git падает с
+ * сообщением «already exists», которое мы нормализуем в `reason: "already-exists"`.
+ */
+async function createReleaseBranch(cwd, fromBranch, fullBranchName) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            ok: false,
+            reason: "not-a-repo",
+            message: "The open folder is not a Git repository.",
+        };
+    }
+    try {
+        // `git checkout -b fullBranchName fromBranch` — создать и переключиться.
+        await git.checkoutBranch(fullBranchName, fromBranch);
+        return { ok: true };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const reason = /already exists/i.test(message)
+            ? "already-exists"
+            : "git-error";
+        return { ok: false, reason, message };
+    }
+}
+/**
+ * Переключиться на существующую локальную ветку `branchName`.
+ *
+ * Эквивалент `git checkout branchName` — без создания новой ветки.
+ * Используется, когда пользователь выбрал «Использовать ветку-источник как
+ * основную» и создавать релизную ветку не нужно.
+ */
+async function checkoutExistingBranch(cwd, branchName) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            ok: false,
+            reason: "not-a-repo",
+            message: "The open folder is not a Git repository.",
+        };
+    }
+    try {
+        await git.checkout(branchName);
+        return { ok: true };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, reason: "git-error", message };
+    }
 }
 //# sourceMappingURL=git.js.map

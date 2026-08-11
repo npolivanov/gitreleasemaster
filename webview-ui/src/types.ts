@@ -50,6 +50,8 @@ export type OutboundMessage =
   | { command: "getBranches" }
   | { command: "refreshBranches" }
   | { command: "getAllBranches" }
+  | { command: "createReleaseBranch"; data: { fromBranch: string; releaseName: string } }
+  | { command: "useSourceBranch"; data: { fromBranch: string } }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -58,4 +60,6 @@ export type OutboundMessage =
 export type InboundMessage =
   | { command: "branchesUpdated"; data: ListBranchesResult }
   | { command: "allBranchesLoaded"; data: BranchSearchResult }
+  | { command: "releaseBranchCreated" }
+  | { command: "releaseBranchError"; data: { message: string } }
   | { command: "settingsUpdated"; data: Settings };

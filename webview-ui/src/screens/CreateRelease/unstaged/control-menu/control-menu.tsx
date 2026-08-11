@@ -5,7 +5,7 @@ import {
   type Control,
   type UseFormRegister,
 } from "react-hook-form";
-import type { CreateReleaseFormValues } from "../../CreateRelease";
+import type { CreateReleaseFormValues } from "../../types";
 import { SelectBranch } from "../../../../features/select-branch";
 
 interface ControlMenuProps {
