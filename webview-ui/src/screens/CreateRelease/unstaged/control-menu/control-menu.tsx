@@ -5,7 +5,7 @@ import {
   type Control,
   type UseFormRegister,
 } from "react-hook-form";
-import type { CreateReleaseFormValues } from "../../";
+import type { CreateReleaseFormValues } from "../../CreateRelease";
 import { SelectBranch } from "../../../../features/select-branch";
 
 interface ControlMenuProps {
@@ -28,7 +28,7 @@ export const ControlMenu = ({ register, control }: ControlMenuProps) => {
     <div>
       <FormControlLabel
         control={<Checkbox {...register("isDeleted")} color="error" />}
-        label="Удалить коммиты"
+        label="Режим удаление"
       />
 
       <Controller
@@ -39,6 +39,7 @@ export const ControlMenu = ({ register, control }: ControlMenuProps) => {
             value={field.value}
             onChange={field.onChange}
             disabled={isDeleted}
+            label={"Branch"}
           />
         )}
       />
