@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import { Step1CreateBranch } from "./step-1-create-branch";
-import { Step2Commits } from "./step-2-commits";
+import { CreateBranch } from "./create-branch/create-branch";
+import { Commits } from "./commits/commits";
 import type { ReleaseContext } from "./types";
 
 /**
@@ -25,8 +25,8 @@ export function CreateReleaseScreen() {
   }, []);
 
   if (step === 1) {
-    return <Step1CreateBranch onCreated={handleCreated} />;
+    return <CreateBranch onCreated={handleCreated} />;
   }
 
-  return <Step2Commits releaseCtx={releaseCtx} />;
+  return <Commits releaseCtx={releaseCtx} />;
 }

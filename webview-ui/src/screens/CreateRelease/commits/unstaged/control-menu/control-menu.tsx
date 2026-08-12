@@ -5,8 +5,8 @@ import {
   type Control,
   type UseFormRegister,
 } from "react-hook-form";
-import type { CreateReleaseFormValues } from "../../types";
-import { SelectBranch } from "../../../../features/select-branch";
+import type { CreateReleaseFormValues } from "../../../types";
+import { SelectBranch } from "../../../../../features/select-branch";
 
 interface ControlMenuProps {
   register: UseFormRegister<CreateReleaseFormValues>;
@@ -22,24 +22,24 @@ interface ControlMenuProps {
  * commits are being deleted.
  */
 export const ControlMenu = ({ register, control }: ControlMenuProps) => {
-  const isDeleted = useWatch({ control, name: "isDeleted" });
+  const isDeleted = useWatch({ control, name: "isDeleteMode" });
 
   return (
     <div>
       <FormControlLabel
-        control={<Checkbox {...register("isDeleted")} color="error" />}
+        control={<Checkbox {...register("isDeleteMode")} />}
         label="Режим удаление"
       />
 
       <Controller
         control={control}
-        name="addFormBranch"
+        name="upstreamBranch"
         render={({ field }) => (
           <SelectBranch
             value={field.value}
             onChange={field.onChange}
             disabled={isDeleted}
-            label={"Branch"}
+            label="Upstream-ветка"
           />
         )}
       />

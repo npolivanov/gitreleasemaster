@@ -13,7 +13,7 @@ import {
   type FieldArrayWithId,
   type UseFormRegister,
 } from "react-hook-form";
-import type { CreateReleaseFormValues } from "../types";
+import type { CreateReleaseFormValues } from "../../types";
 import AddIcon from "@mui/icons-material/Add";
 import { ControlMenu } from "./control-menu/control-menu";
 
@@ -48,7 +48,7 @@ export function UnstagedCommitsList({
   control,
 }: UnstagedCommitsListProps) {
   return (
-    <>
+    <Box sx={{ padding: "10px", width: "100%" }}>
       <Typography variant="h6">Коммиты для релиза</Typography>
 
       <ControlMenu register={register} control={control} />
@@ -100,6 +100,6 @@ export function UnstagedCommitsList({
           Добавить коммит
         </Button>
       </Box>
-    </>
+    </Box>
   );
 }

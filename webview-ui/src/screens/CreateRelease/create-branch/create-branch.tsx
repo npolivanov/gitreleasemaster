@@ -11,10 +11,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { SelectBranch } from "../../features/select-branch";
-import { useAppStore } from "../../state-manager/store";
-import { onMessage, postMessage } from "../../vscode";
-import type { ReleaseContext } from "./types";
+import { SelectBranch } from "../../../features/select-branch";
+import { useAppStore } from "../../../state-manager/store";
+import { onMessage, postMessage } from "../../../vscode";
+import type { ReleaseContext } from "../types";
 
 interface Step1CreateBranchProps {
   /** Вызывается после успешного создания ветки — переключает wizard на Шаг 2. */
@@ -36,7 +36,7 @@ interface Step1CreateBranchProps {
  *
  * Форм-агностично: react-hook-form тут нет — достаточно локального state.
  */
-export function Step1CreateBranch({ onCreated }: Step1CreateBranchProps) {
+export function CreateBranch({ onCreated }: Step1CreateBranchProps) {
   const releasePrefix = useAppStore((s) => s.settings.releasePrefix);
   // Нормализованный префикс для adornment'а — всегда с `/` на конце.
   const adornment = releasePrefix.endsWith("/")
@@ -76,9 +76,7 @@ export function Step1CreateBranch({ onCreated }: Step1CreateBranchProps) {
       if (message.command === "releaseBranchCreated") {
         const fromBranch = parentBranchRef.current;
         // В режиме «использовать ветку-источник» releaseName = fromBranch.
-        const name = useSourceRef.current
-          ? fromBranch
-          : releaseNameRef.current;
+        const name = useSourceRef.current ? fromBranch : releaseNameRef.current;
         onCreatedRef.current({ fromBranch, releaseName: name });
         return;
       }

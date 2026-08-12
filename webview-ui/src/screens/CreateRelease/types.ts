@@ -13,8 +13,8 @@ export interface CommitItem {
 /** Форма всего экрана коммитов (Шаг 2). */
 export interface CreateReleaseFormValues {
   commits: CommitItem[];
-  isDeleted: boolean;
-  addFormBranch: string;
+  isDeleteMode: boolean;
+  upstreamBranch: string;
 }
 
 /** Контекст созданной релизной ветки — передаётся из Шага 1 в Шаг 2. */
