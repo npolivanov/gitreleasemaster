@@ -8,6 +8,7 @@ const handleCreateRelease_1 = require("./commands/handleCreateRelease");
 const handleGetAllBranches_1 = require("./commands/handleGetAllBranches");
 const handleCreateReleaseBranch_1 = require("./commands/handleCreateReleaseBranch");
 const handleUseSourceBranch_1 = require("./commands/handleUseSourceBranch");
+const handleResolveCommits_1 = require("./commands/handleResolveCommits");
 /**
  * Маршрутизатор входящих сообщений от вебвюя.
  *
@@ -28,6 +29,9 @@ async function dispatchCommand(message, deps) {
             return;
         case "useSourceBranch":
             await (0, handleUseSourceBranch_1.handleUseSourceBranch)(message, deps);
+            return;
+        case "resolveCommits":
+            await (0, handleResolveCommits_1.handleResolveCommits)(message, deps);
             return;
         case "getSettings":
             await (0, handleGetSettings_1.handleGetSettings)(deps);

@@ -4,9 +4,11 @@ import {
   listAllBranches,
   createReleaseBranch,
   checkoutExistingBranch,
+  resolveCommits,
   type ListBranchesResult,
   type BranchSearchResult,
   type CreateBranchResult,
+  type ResolveCommitsResult,
 } from "../git";
 import { readSettings } from "./settings";
 
@@ -94,4 +96,25 @@ export async function safeUseSourceBranch(
     };
   }
   return checkoutExistingBranch(cwd, fromBranch);
+}
+
+/**
+ * Разрешить список query (SHA/сообщения) в реальные коммиты репозитория.
+ *
+ * Используется для наполнения правой панели экрана коммитов. Если папка не
+ * открыта — возвращаем понятную ошибку.
+ */
+export async function safeResolveCommits(
+  upstreamBranch: string,
+  queries: string[],
+): Promise<ResolveCommitsResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      ok: false,
+      reason: "no-folder",
+      message: "Open a folder that contains a Git repository.",
+    };
+  }
+  return resolveCommits(cwd, upstreamBranch, queries);
 }

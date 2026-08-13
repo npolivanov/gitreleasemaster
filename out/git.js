@@ -41,6 +41,7 @@ exports.listReleaseBranches = listReleaseBranches;
 exports.listAllBranches = listAllBranches;
 exports.createReleaseBranch = createReleaseBranch;
 exports.checkoutExistingBranch = checkoutExistingBranch;
+exports.resolveCommits = resolveCommits;
 const simple_git_1 = __importDefault(require("simple-git"));
 const vscode = __importStar(require("vscode"));
 /**
@@ -236,5 +237,101 @@ async function checkoutExistingBranch(cwd, branchName) {
         const message = err instanceof Error ? err.message : String(err);
         return { ok: false, reason: "git-error", message };
     }
+}
+/**
+ * Разрешить каждый query из `queries` в реальный коммит репозитория.
+ *
+ * `query` может быть:
+ *   - полным/частичным SHA → резолвится через `git rev-parse`;
+ *   - иначе подстрокой сообщения → ищется через `git log --grep -i`
+ *     (по всей истории репозитория, case-insensitive).
+ *
+ * После разрешения найденный коммит **проверяется на вхождение в
+ * `upstreamBranch`** через `git merge-base --is-ancestor`. Если коммит не
+ * является предком выбранной ветки — он считается не найденным (попадает в
+ * `notFound`). Так пользователь не добавит коммит из чужой ветки.
+ *
+ * Не найденные query возвращаются в `notFound`, чтобы UI их подсветил.
+ */
+async function resolveCommits(cwd, upstreamBranch, queries) {
+    console.log("!!!! WORKING !!!!!");
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            ok: false,
+            reason: "not-a-repo",
+            message: "The open folder is not a Git repository.",
+        };
+    }
+    const resolved = {};
+    const notFound = [];
+    for (const raw of queries) {
+        const query = raw.trim();
+        if (query === "") {
+            continue;
+        }
+        let candidateSha = null;
+        // Ищем сначала по хэшу
+        try {
+            await git.raw(["merge-base", "--is-ancestor", query, upstreamBranch]);
+            candidateSha = [query];
+        }
+        catch {
+            ///
+        }
+        if (!candidateSha) {
+            try {
+                const log = await git.log([
+                    upstreamBranch,
+                    `--grep=${query}`,
+                    "-F",
+                    "-i",
+                ]);
+                console.log("log.all >>>>", log.all);
+                if (log.all.length) {
+                    candidateSha = log.all.map((commit) => commit.hash);
+                }
+            }
+            catch (error) {
+                console.log("ERROR >>>>", error);
+                // ignore — ниже попадём в notFound
+            }
+        }
+        for (let hash of candidateSha || []) {
+            // Метаданные через raw git log (simple-git'овский git.log({ hash }) падает
+            // с "unknown revision", формируя невалидный аргумент hash=...).
+            try {
+                await git.raw(["merge-base", "--is-ancestor", hash, upstreamBranch]);
+                const out = await git.raw([
+                    "log",
+                    "-1",
+                    hash,
+                    "--format=%H%x1f%an%x1f%aI%x1f%s",
+                ]);
+                const [sha, author, date, message] = out.trim().split("\x1f");
+                if (!sha) {
+                    notFound.push(query);
+                    continue;
+                }
+                resolved[sha] = {
+                    shortSha: sha.slice(0, 7),
+                    message: message ?? "",
+                    author: author ?? "",
+                    date: date ?? "",
+                };
+            }
+            catch {
+                notFound.push(query);
+            }
+        }
+    }
+    return { ok: true, resolved, notFound };
 }
 //# sourceMappingURL=git.js.map

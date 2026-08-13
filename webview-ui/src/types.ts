@@ -45,13 +45,43 @@ export interface Settings {
   language: Language;
 }
 
+export interface ResolvedCommitItem {
+  /** Короткий SHA (первые 7 симв.). */
+  shortSha: string;
+  /** Первая строка сообщения коммита. */
+  message: string;
+  /** Автор коммита. */
+  author: string;
+  /** ISO-дата коммита. */
+  date: string;
+}
+
+/** Реальный коммит, разрешённый из введённого пользователем query (SHA/сообщение). */
+export type ResolvedCommit = Record<string, Partial<ResolvedCommitItem>>;
+
+/**
+ * Результат разрешения списка коммитов.
+ *
+ * `notFound` содержит исходные query, которые не удалось сопоставить коммиту.
+ */
+export type ResolveCommitsResult =
+  | { ok: true; resolved: ResolvedCommit; notFound: string[] }
+  | { ok: false; message: string };
+
 /** Messages sent from the webview to the extension host. */
 export type OutboundMessage =
   | { command: "getBranches" }
   | { command: "refreshBranches" }
   | { command: "getAllBranches" }
-  | { command: "createReleaseBranch"; data: { fromBranch: string; releaseName: string } }
+  | {
+      command: "createReleaseBranch";
+      data: { fromBranch: string; releaseName: string };
+    }
   | { command: "useSourceBranch"; data: { fromBranch: string } }
+  | {
+      command: "resolveCommits";
+      data: { upstreamBranch: string; queries: string[] };
+    }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -62,4 +92,5 @@ export type InboundMessage =
   | { command: "allBranchesLoaded"; data: BranchSearchResult }
   | { command: "releaseBranchCreated" }
   | { command: "releaseBranchError"; data: { message: string } }
+  | { command: "commitsResolved"; data: ResolveCommitsResult }
   | { command: "settingsUpdated"; data: Settings };

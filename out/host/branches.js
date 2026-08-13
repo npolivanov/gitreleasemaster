@@ -4,6 +4,7 @@ exports.safeListBranches = safeListBranches;
 exports.safeListAllBranches = safeListAllBranches;
 exports.safeCreateReleaseBranch = safeCreateReleaseBranch;
 exports.safeUseSourceBranch = safeUseSourceBranch;
+exports.safeResolveCommits = safeResolveCommits;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
 /**
@@ -82,5 +83,22 @@ async function safeUseSourceBranch(fromBranch) {
         };
     }
     return (0, git_1.checkoutExistingBranch)(cwd, fromBranch);
+}
+/**
+ * Разрешить список query (SHA/сообщения) в реальные коммиты репозитория.
+ *
+ * Используется для наполнения правой панели экрана коммитов. Если папка не
+ * открыта — возвращаем понятную ошибку.
+ */
+async function safeResolveCommits(upstreamBranch, queries) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            reason: "no-folder",
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.resolveCommits)(cwd, upstreamBranch, queries);
 }
 //# sourceMappingURL=branches.js.map

@@ -1,4 +1,4 @@
-import simpleGit from "simple-git";
+import simpleGit, { ListLogLine } from "simple-git";
 import * as vscode from "vscode";
 
 /** Information about a single release branch. */
@@ -191,6 +191,33 @@ export type CreateBranchResult =
       message: string;
     };
 
+/** Реальный коммит, разрешённый из введённого пользователем query (SHA/сообщение). */
+export interface ResolvedCommitItem {
+  /** Короткий SHA (первые 7 симв.). */
+  shortSha: string;
+  /** Первая строка сообщения коммита. */
+  message: string;
+  /** Автор коммита. */
+  author: string;
+  /** ISO-дата коммита. */
+  date: string;
+}
+
+export type ResolvedCommit = Record<string, Partial<ResolvedCommitItem>>;
+/**
+ * Результат разрешения списка коммитов.
+ *
+ * `notFound` содержит исходные query, которые не удалось сопоставить коммиту —
+ * чтобы UI мог подсветить их пользователю.
+ */
+export type ResolveCommitsResult =
+  | { ok: true; resolved: ResolvedCommit; notFound: string[] }
+  | {
+      ok: false;
+      reason: "no-folder" | "not-a-repo" | "git-error";
+      message: string;
+    };
+
 /**
  * Создать новую ветку `fullBranchName` от `fromBranch` и переключиться на неё.
  *
@@ -268,4 +295,112 @@ export async function checkoutExistingBranch(
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: "git-error", message };
   }
+}
+
+/**
+ * Разрешить каждый query из `queries` в реальный коммит репозитория.
+ *
+ * `query` может быть:
+ *   - полным/частичным SHA → резолвится через `git rev-parse`;
+ *   - иначе подстрокой сообщения → ищется через `git log --grep -i`
+ *     (по всей истории репозитория, case-insensitive).
+ *
+ * После разрешения найденный коммит **проверяется на вхождение в
+ * `upstreamBranch`** через `git merge-base --is-ancestor`. Если коммит не
+ * является предком выбранной ветки — он считается не найденным (попадает в
+ * `notFound`). Так пользователь не добавит коммит из чужой ветки.
+ *
+ * Не найденные query возвращаются в `notFound`, чтобы UI их подсветил.
+ */
+export async function resolveCommits(
+  cwd: string,
+  upstreamBranch: string,
+  queries: string[],
+): Promise<ResolveCommitsResult> {
+  console.log("!!!! WORKING !!!!!");
+
+  const git = simpleGit({ baseDir: cwd });
+
+  let isRepo = false;
+  try {
+    isRepo = await git.checkIsRepo();
+  } catch {
+    // ignore — treat as not-a-repo
+  }
+  if (!isRepo) {
+    return {
+      ok: false,
+      reason: "not-a-repo",
+      message: "The open folder is not a Git repository.",
+    };
+  }
+
+  const resolved: ResolvedCommit = {};
+  const notFound: string[] = [];
+
+  for (const raw of queries) {
+    const query = raw.trim();
+    if (query === "") {
+      continue;
+    }
+
+    let candidateSha: Array<string> | null = null;
+
+    // Ищем сначала по хэшу
+    try {
+      await git.raw(["merge-base", "--is-ancestor", query, upstreamBranch]);
+      candidateSha = [query];
+    } catch {
+      ///
+    }
+
+    if (!candidateSha) {
+      try {
+        const log = await git.log([
+          upstreamBranch,
+          `--grep=${query}`,
+          "-F",
+          "-i",
+        ]);
+        console.log("log.all >>>>", log.all);
+
+        if (log.all.length) {
+          candidateSha = log.all.map((commit) => commit.hash);
+        }
+      } catch (error) {
+        console.log("ERROR >>>>", error);
+        // ignore — ниже попадём в notFound
+      }
+    }
+
+    for (let hash of candidateSha || []) {
+      // Метаданные через raw git log (simple-git'овский git.log({ hash }) падает
+      // с "unknown revision", формируя невалидный аргумент hash=...).
+      try {
+        await git.raw(["merge-base", "--is-ancestor", hash, upstreamBranch]);
+
+        const out = await git.raw([
+          "log",
+          "-1",
+          hash,
+          "--format=%H%x1f%an%x1f%aI%x1f%s",
+        ]);
+        const [sha, author, date, message] = out.trim().split("\x1f");
+        if (!sha) {
+          notFound.push(query);
+          continue;
+        }
+        resolved[sha] = {
+          shortSha: sha.slice(0, 7),
+          message: message ?? "",
+          author: author ?? "",
+          date: date ?? "",
+        };
+      } catch {
+        notFound.push(query);
+      }
+    }
+  }
+
+  return { ok: true, resolved, notFound };
 }
