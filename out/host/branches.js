@@ -5,6 +5,9 @@ exports.safeListAllBranches = safeListAllBranches;
 exports.safeCreateReleaseBranch = safeCreateReleaseBranch;
 exports.safeUseSourceBranch = safeUseSourceBranch;
 exports.safeResolveCommits = safeResolveCommits;
+exports.safeCherryPick = safeCherryPick;
+exports.safeCherryPickContinue = safeCherryPickContinue;
+exports.safeCherryPickAbort = safeCherryPickAbort;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
 /**
@@ -100,5 +103,47 @@ async function safeResolveCommits(upstreamBranch, queries) {
         };
     }
     return (0, git_1.resolveCommits)(cwd, upstreamBranch, queries);
+}
+/**
+ * Применить один коммит через cherry-pick на ветку `branch`.
+ *
+ * Если `branch` задан и не является текущей — хост переключится на неё перед
+ * применением. Если папка не открыта — возвращаем ошибку в формате результата.
+ */
+async function safeCherryPick(sha, branch) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            sha,
+            status: "error",
+            files: [],
+            message: "Open a folder that contains a Git repository.",
+            branch: "",
+        };
+    }
+    return (0, git_1.cherryPickCommit)(cwd, sha, branch);
+}
+/** Завершить cherry-pick после ручного резолва конфликта. */
+async function safeCherryPickContinue() {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            status: "error",
+            files: [],
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.cherryPickContinue)(cwd);
+}
+/** Отменить незавершённый cherry-pick. */
+async function safeCherryPickAbort() {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.cherryPickAbort)(cwd);
 }
 //# sourceMappingURL=branches.js.map

@@ -4,6 +4,9 @@ import type {
   ListBranchesResult,
   BranchSearchResult,
   ResolveCommitsResult,
+  CherryPickResult,
+  CherryPickContinueResult,
+  CherryPickAbortResult,
 } from "../git";
 
 /** Сообщения, приходящие от вебвюя (входящие команды). */
@@ -14,6 +17,10 @@ export type InboundMessage =
   | { command: "createReleaseBranch"; data: { fromBranch: string; releaseName: string } }
   | { command: "useSourceBranch"; data: { fromBranch: string } }
   | { command: "resolveCommits"; data: { upstreamBranch: string; queries: string[] } }
+  | { command: "cherryPick"; data: { sha: string; branch?: string } }
+  | { command: "cherryPickContinue" }
+  | { command: "cherryPickAbort" }
+  | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -25,6 +32,9 @@ export type OutboundMessage =
   | { command: "releaseBranchCreated" }
   | { command: "releaseBranchError"; data: { message: string } }
   | { command: "commitsResolved"; data: ResolveCommitsResult }
+  | { command: "cherryPickResult"; data: CherryPickResult }
+  | { command: "cherryPickContinueResult"; data: CherryPickContinueResult }
+  | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };
 
 /**

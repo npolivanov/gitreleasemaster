@@ -77,7 +77,15 @@ export function CreateBranch({ onCreated }: Step1CreateBranchProps) {
         const fromBranch = parentBranchRef.current;
         // В режиме «использовать ветку-источник» releaseName = fromBranch.
         const name = useSourceRef.current ? fromBranch : releaseNameRef.current;
-        onCreatedRef.current({ fromBranch, releaseName: name });
+        // Финальная ветка: префикс+имя или сама ветка-источник. Префикс читаем
+        // из store в момент ответа хоста (не из замыкания) — настройки могли
+        // обновиться, и имя должно совпасть с тем, что склеил хост.
+        const prefix = useAppStore.getState().settings.releasePrefix;
+        const cleanPrefix = prefix.endsWith("/") ? prefix : `${prefix}/`;
+        const branch = useSourceRef.current
+          ? fromBranch
+          : `${cleanPrefix}${name}`;
+        onCreatedRef.current({ fromBranch, releaseName: name, branch });
         return;
       }
       if (message.command === "releaseBranchError") {

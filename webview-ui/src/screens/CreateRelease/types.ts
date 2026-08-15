@@ -21,4 +21,10 @@ export interface CreateReleaseFormValues {
 export interface ReleaseContext {
   fromBranch: string;
   releaseName: string;
+  /**
+   * Финальное имя ветки, на которую перешли в Шаге 1:
+   * обычный режим → `releasePrefix + releaseName`, режим «использовать
+   * ветку-источник» → `fromBranch`. На неё Шаг 2 применяет cherry-pick.
+   */
+  branch: string;
 }

@@ -9,6 +9,10 @@ const handleGetAllBranches_1 = require("./commands/handleGetAllBranches");
 const handleCreateReleaseBranch_1 = require("./commands/handleCreateReleaseBranch");
 const handleUseSourceBranch_1 = require("./commands/handleUseSourceBranch");
 const handleResolveCommits_1 = require("./commands/handleResolveCommits");
+const handleCherryPick_1 = require("./commands/handleCherryPick");
+const handleCherryPickContinue_1 = require("./commands/handleCherryPickContinue");
+const handleCherryPickAbort_1 = require("./commands/handleCherryPickAbort");
+const handleOpenScmView_1 = require("./commands/handleOpenScmView");
 /**
  * Маршрутизатор входящих сообщений от вебвюя.
  *
@@ -32,6 +36,18 @@ async function dispatchCommand(message, deps) {
             return;
         case "resolveCommits":
             await (0, handleResolveCommits_1.handleResolveCommits)(message, deps);
+            return;
+        case "cherryPick":
+            await (0, handleCherryPick_1.handleCherryPick)(message, deps);
+            return;
+        case "cherryPickContinue":
+            await (0, handleCherryPickContinue_1.handleCherryPickContinue)(deps);
+            return;
+        case "cherryPickAbort":
+            await (0, handleCherryPickAbort_1.handleCherryPickAbort)(deps);
+            return;
+        case "openScmView":
+            await (0, handleOpenScmView_1.handleOpenScmView)();
             return;
         case "getSettings":
             await (0, handleGetSettings_1.handleGetSettings)(deps);

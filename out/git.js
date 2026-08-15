@@ -42,6 +42,9 @@ exports.listAllBranches = listAllBranches;
 exports.createReleaseBranch = createReleaseBranch;
 exports.checkoutExistingBranch = checkoutExistingBranch;
 exports.resolveCommits = resolveCommits;
+exports.cherryPickCommit = cherryPickCommit;
+exports.cherryPickContinue = cherryPickContinue;
+exports.cherryPickAbort = cherryPickAbort;
 const simple_git_1 = __importDefault(require("simple-git"));
 const vscode = __importStar(require("vscode"));
 /**
@@ -254,7 +257,6 @@ async function checkoutExistingBranch(cwd, branchName) {
  * Не найденные query возвращаются в `notFound`, чтобы UI их подсветил.
  */
 async function resolveCommits(cwd, upstreamBranch, queries) {
-    console.log("!!!! WORKING !!!!!");
     const git = (0, simple_git_1.default)({ baseDir: cwd });
     let isRepo = false;
     try {
@@ -277,16 +279,23 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
         if (query === "") {
             continue;
         }
-        let candidateSha = null;
-        // Ищем сначала по хэшу
+        let candidateShas = [];
+        // 1. Строгий поиск частичного SHA только в истории upstreamBranch
         try {
-            await git.raw(["merge-base", "--is-ancestor", query, upstreamBranch]);
-            candidateSha = [query];
+            // Получаем список ВСЕХ коммитов, являющихся предками upstreamBranch
+            const listOutput = await git.raw(["rev-list", upstreamBranch]);
+            const allShas = listOutput.trim().split("\n").filter(Boolean);
+            // Ищем совпадения по префиксу (как это делает rev-parse, но только среди наших коммитов)
+            const matches = allShas.filter((sha) => sha.startsWith(query));
+            if (matches.length > 0) {
+                candidateShas = matches;
+            }
         }
         catch {
-            ///
+            // Ветка не найдена или другая ошибка
         }
-        if (!candidateSha) {
+        // 2. Если не SHA, ищем как подстроку в сообщениях коммитов
+        if (candidateShas.length === 0) {
             try {
                 const log = await git.log([
                     upstreamBranch,
@@ -294,9 +303,8 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
                     "-F",
                     "-i",
                 ]);
-                console.log("log.all >>>>", log.all);
-                if (log.all.length) {
-                    candidateSha = log.all.map((commit) => commit.hash);
+                if (log.all.length > 0) {
+                    candidateShas = log.all.map((commit) => commit.hash);
                 }
             }
             catch (error) {
@@ -304,11 +312,13 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
                 // ignore — ниже попадём в notFound
             }
         }
-        for (let hash of candidateSha || []) {
-            // Метаданные через raw git log (simple-git'овский git.log({ hash }) падает
-            // с "unknown revision", формируя невалидный аргумент hash=...).
+        // 3. Проверяем найденные кандидаты на вхождение в upstreamBranch
+        let foundInUpstream = false;
+        for (const hash of candidateShas) {
             try {
+                // Проверяем, является ли коммит предком upstreamBranch
                 await git.raw(["merge-base", "--is-ancestor", hash, upstreamBranch]);
+                // Получаем метаданные
                 const out = await git.raw([
                     "log",
                     "-1",
@@ -316,22 +326,228 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
                     "--format=%H%x1f%an%x1f%aI%x1f%s",
                 ]);
                 const [sha, author, date, message] = out.trim().split("\x1f");
-                if (!sha) {
-                    notFound.push(query);
-                    continue;
+                if (sha) {
+                    resolved[sha] = {
+                        shortSha: sha.slice(0, 7),
+                        message: message ?? "",
+                        author: author ?? "",
+                        date: date ?? "",
+                    };
+                    foundInUpstream = true;
                 }
-                resolved[sha] = {
-                    shortSha: sha.slice(0, 7),
-                    message: message ?? "",
-                    author: author ?? "",
-                    date: date ?? "",
-                };
             }
             catch {
-                notFound.push(query);
+                // Коммит не является предком upstreamBranch или произошла ошибка парсинга.
+                // Игнорируем, продолжаем цикл (возможно, подойдут следующие хэши из grep).
             }
+        }
+        // 4. Если ни один кандидат не подошел (или их не было вообще) — в notFound
+        if (!foundInUpstream) {
+            notFound.push(query);
         }
     }
     return { ok: true, resolved, notFound };
+}
+/** Собрать список конфликтующих файлов из статуса рабочего дерева. */
+async function getConflictedFiles(git) {
+    try {
+        const status = await git.status();
+        if (status.conflicted.length > 0) {
+            return status.conflicted;
+        }
+    }
+    catch {
+        // ignore — пробуем raw-fallback ниже
+    }
+    // Fallback: unmerged-файлы напрямую из git (если парсер simple-git ничего не нашёл).
+    try {
+        const out = await git.raw(["diff", "--name-only", "--diff-filter=U"]);
+        return out.trim().split("\n").filter(Boolean);
+    }
+    catch {
+        return [];
+    }
+}
+/**
+ * Существует ли незавершённый cherry-pick (файл CHERRY_PICK_HEAD).
+ * Признак того, что sequencer активен и ждёт резолва/continue.
+ */
+async function hasCherryPickHead(git) {
+    try {
+        await git.raw(["rev-parse", "-q", "--verify", "CHERRY_PICK_HEAD"]);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Применить один коммит через `git cherry-pick` на ветку `expectedBranch`.
+ *
+ * Если передан `expectedBranch` и текущая ветка отличается — хост сначала
+ * переключается на неё (`git checkout`). Это гарантирует, что коммиты попадают
+ * именно в релизную ветку, даже если пользователь переключал ветки между
+ * шагами wizard'а.
+ *
+ * Порядок проверок:
+ *   0. Убедиться, что активна `expectedBranch` (иначе — checkout).
+ *   1. Коммит уже в истории HEAD (`merge-base --is-ancestor`) → "skipped"
+ *      с причиной "in-branch".
+ *   2. `cherry-pick` успешен → "applied".
+ *   3. Ошибка: конфликт (unmerged-файлы, CHERRY_PICK_HEAD или «already in
+ *      progress») → "conflict" (+ файлы для UI). Патч пуст (изменения уже
+ *      применены) → `--skip` и "skipped" с причиной "empty-patch".
+ *      Иначе → "error".
+ */
+async function cherryPickCommit(cwd, sha, expectedBranch) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            sha,
+            status: "error",
+            files: [],
+            message: "The open folder is not a Git repository.",
+            branch: "",
+        };
+    }
+    // 0. Гарантировать целевую ветку: если пользователь переключил ветку между
+    //    шагами — возвращаемся на релизную перед применением.
+    let currentBranch = "";
+    try {
+        currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+    }
+    catch {
+        // не критично — продолжаем с пустым именем
+    }
+    if (expectedBranch && expectedBranch !== currentBranch) {
+        try {
+            await git.checkout(expectedBranch);
+            currentBranch = expectedBranch;
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                sha,
+                status: "error",
+                files: [],
+                message: `Не удалось переключиться на ветку «${expectedBranch}»: ${message}`,
+                branch: currentBranch,
+            };
+        }
+    }
+    // 1. Коммит уже входит в историю текущей ветки — пропускаем.
+    try {
+        await git.raw(["merge-base", "--is-ancestor", sha, "HEAD"]);
+        return {
+            sha,
+            status: "skipped",
+            files: [],
+            message: "",
+            branch: currentBranch,
+            skippedReason: "in-branch",
+        };
+    }
+    catch {
+        // не предок HEAD — это нормально, применяем cherry-pick
+    }
+    // 2. Сам cherry-pick.
+    //    ВАЖНО: без `-c core.editor=...` — в git ≥ 2.48 это фатальная ошибка
+    //    («Configuring core.editor is not permitted without enabling
+    //    allowUnsafeEditor»), которая убивает команду ещё до её выполнения.
+    //    Обычному cherry-pick редактор не нужен: сообщение берётся из коммита.
+    try {
+        await git.raw(["cherry-pick", sha]);
+        return {
+            sha,
+            status: "applied",
+            files: [],
+            message: "",
+            branch: currentBranch,
+        };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // 3a. Конфликт: unmerged-файлы в рабочем дереве, активный sequencer
+        //     (CHERRY_PICK_HEAD) или cherry-pick поверх незавершённого.
+        const alreadyInProgress = /already in progress/i.test(message);
+        const files = await getConflictedFiles(git);
+        const sequencerActive = await hasCherryPickHead(git);
+        if (files.length > 0 || sequencerActive || alreadyInProgress) {
+            return {
+                sha,
+                status: "conflict",
+                files,
+                message: "",
+                branch: currentBranch,
+            };
+        }
+        // 3b. Пустой патч — изменения уже применены другим коммитом.
+        //     Git оставляет sequencer в незавершённом состоянии — чистим через --skip.
+        if (/nothing to commit|now empty|allow-empty/i.test(message)) {
+            try {
+                await git.raw(["cherry-pick", "--skip"]);
+            }
+            catch {
+                // ignore — даже если --skip не нужен, считаем пропуск состоявшимся
+            }
+            return {
+                sha,
+                status: "skipped",
+                files: [],
+                message: "",
+                branch: currentBranch,
+                skippedReason: "empty-patch",
+            };
+        }
+        // 3c. Прочая ошибка git.
+        return { sha, status: "error", files: [], message, branch: currentBranch };
+    }
+}
+/**
+ * Завершить cherry-pick после ручного разрешения конфликта пользователем
+ * (`git cherry-pick --continue`). Если конфликты ещё не зарезолвлены —
+ * вернёт "conflict" снова (пользователь может продолжать пытаться).
+ *
+ * Редактор не нужен: cherry-pick без `--edit` использует сообщение
+ * оригинального коммита как есть (подтверждено синтетическим тестом),
+ * а `-c core.editor=...` в git ≥ 2.48 фатально запрещён — не используем его.
+ */
+async function cherryPickContinue(cwd) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    try {
+        await git.raw(["cherry-pick", "--continue"]);
+        return { status: "applied", files: [], message: "" };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const files = await getConflictedFiles(git);
+        if (files.length > 0) {
+            return { status: "conflict", files, message: "" };
+        }
+        // Sequencer ещё активен (не всё зарезолвлено/застажено) — остаёмся в конфликте.
+        if (await hasCherryPickHead(git)) {
+            return { status: "conflict", files: [], message: "" };
+        }
+        return { status: "error", files: [], message };
+    }
+}
+/** Отменить незавершённый cherry-pick (`git cherry-pick --abort`). */
+async function cherryPickAbort(cwd) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    try {
+        await git.raw(["cherry-pick", "--abort"]);
+        return { ok: true, message: "" };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, message };
+    }
 }
 //# sourceMappingURL=git.js.map

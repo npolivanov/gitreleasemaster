@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   List,
   ListItem,
@@ -8,11 +9,25 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import type { ResolvedCommit } from "../../../../types";
+import CheckIcon from "@mui/icons-material/Check";
+import DoneAllIcon from "@mui/icons-material/DoneAll";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import ErrorIcon from "@mui/icons-material/Error";
+import type { ResolvedCommitItem } from "../../../../types";
+import { FlexBox } from "../../../../components/ui/flex-box";
+import {
+  useApplyCommits,
+  type CommitApplyStatus,
+  type SkipReason,
+} from "./use-apply-commits";
+
+type Commit = ResolvedCommitItem & {
+  sha: string;
+};
 
 export interface CommitsPreviewProps {
   /** Разрешённые коммиты для добавления в релиз. */
-  commits: ResolvedCommit;
+  commits: Commit[];
   /** Идёт ли запрос к хосту. */
   loading: boolean;
   /** Сообщение об ошибке (когда сам запрос провалился). */
@@ -20,14 +35,44 @@ export interface CommitsPreviewProps {
   /** Исходные query, которые не удалось сопоставить коммиту. */
   notFound: string[];
   title: string;
+  /** Целевая ветка для cherry-pick (релизная ветка из Шага 1). */
+  branch?: string;
+}
+
+/** Подпись причины пропуска пункта. */
+function skipLabel(reason?: SkipReason): string {
+  if (reason === "in-branch") return " · уже в ветке";
+  if (reason === "empty-patch") return " · изменения уже применены";
+  return "";
+}
+
+/** Индикатор статуса применения одного пункта списка. */
+function StatusIcon({ status }: { status?: CommitApplyStatus }) {
+  switch (status) {
+    case "in-progress":
+      return <CircularProgress size={14} />;
+    case "done":
+      return <CheckIcon fontSize="small" color="success" />;
+    case "skipped":
+      return <DoneAllIcon fontSize="small" color="info" />;
+    case "conflict":
+      return <WarningAmberIcon fontSize="small" color="warning" />;
+    case "error":
+      return <ErrorIcon fontSize="small" color="error" />;
+    default:
+      return null;
+  }
 }
 
 /**
  * Правая панель экрана коммитов — список реальных коммитов, разрешённых из
  * введённых пользователем query (SHA/сообщения) на стороне хоста.
  *
- * Чисто презентационный компонент: все данные приходят через пропсы, никакого
- * своего состояния. Состояния загрузки/ошибки/не-найдено отображаются явно.
+ * Кнопка «Применить» запускает пошаговый cherry-pick на текущую релизную
+ * ветку (см. `useApplyCommits`): каждый пункт получает статус — loader на
+ * активном, галочка на пройденном, предупреждение на конфликте. При конфликте
+ * процесс останавливается и ждёт ручного резолва в VS Code (Source Control),
+ * после чего можно продолжить или прервать.
  */
 export function CommitsPreview({
   commits,
@@ -35,15 +80,35 @@ export function CommitsPreview({
   error,
   notFound,
   title,
+  branch,
 }: CommitsPreviewProps) {
-  const preparedCommits = Object.entries(commits).map(([key, values]) => {
-    return {
-      sha: key,
-      ...values,
-    };
-  });
+  const {
+    statuses,
+    phase,
+    conflictFiles,
+    error: applyError,
+    applyBranch,
+    skipReasons,
+    apply,
+    continueAfterConflict,
+    abort,
+    openConflicts,
+  } = useApplyCommits(commits, branch);
+
   const isEmpty =
-    !loading && !error && preparedCommits.length === 0 && notFound.length === 0;
+    !loading && !error && commits.length === 0 && notFound.length === 0;
+
+  if (isEmpty) {
+    return (
+      <Box sx={{ padding: "10px", width: "100%" }}>
+        <Typography variant="body2" color="text.secondary">
+          Нажмите «Добавить», чтобы загрузить коммиты.
+        </Typography>
+      </Box>
+    );
+  }
+
+  const canApply = phase === "idle" || phase === "error";
 
   return (
     <Box sx={{ padding: "10px", width: "100%" }}>
@@ -52,12 +117,18 @@ export function CommitsPreview({
         sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}
       >
         <Typography variant="h6">{title}</Typography>
-        {preparedCommits.length > 0 && (
+        {commits.length > 0 && (
           <Typography variant="caption" color="text.secondary">
-            {preparedCommits.length} шт.
+            {commits.length} шт.
           </Typography>
         )}
       </Stack>
+
+      {(branch || applyBranch) && (
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+          Применяется на: {applyBranch ?? branch}
+        </Typography>
+      )}
 
       {loading && (
         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
@@ -76,44 +147,126 @@ export function CommitsPreview({
         </Alert>
       )}
 
-      {!loading && !error && preparedCommits.length > 0 && (
-        <List dense disablePadding>
-          {preparedCommits.map((commit) => (
-            <ListItem
-              key={commit.sha}
-              divider
-              sx={{ py: 0.5, px: 0 }}
-              secondaryAction={
-                <Typography
-                  variant="caption"
-                  sx={{ fontFamily: "ui-monospace, monospace" }}
-                  color="text.secondary"
-                >
-                  {commit.shortSha}
-                </Typography>
-              }
-            >
-              <ListItemText
-                primary={
-                  <Typography variant="body2">{commit.message}</Typography>
+      <FlexBox
+        sx={{
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "10px",
+        }}
+      >
+        {!loading && !error && commits.length > 0 && (
+          <List
+            dense
+            disablePadding
+            sx={{
+              width: "100%",
+            }}
+          >
+            {commits.map((commit) => (
+              <ListItem
+                key={commit.sha}
+                divider
+                sx={{ py: 0.5, px: 0 }}
+                secondaryAction={
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: "center" }}
+                  >
+                    <StatusIcon status={statuses[commit.sha]} />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontFamily: "ui-monospace, monospace" }}
+                      color="text.secondary"
+                    >
+                      {commit.shortSha}
+                    </Typography>
+                  </Stack>
                 }
-                secondary={
-                  <Typography variant="caption" color="text.secondary">
-                    {commit.author} ·{" "}
-                    {new Date(commit?.date || "").toLocaleString()}
-                  </Typography>
-                }
-              />
-            </ListItem>
-          ))}
-        </List>
-      )}
+              >
+                <ListItemText
+                  primary={
+                    <Typography variant="body2">{commit.message}</Typography>
+                  }
+                  secondary={
+                    <Typography variant="caption" color="text.secondary">
+                      {commit.author} ·{" "}
+                      {new Date(commit?.date || "").toLocaleString()}
+                      {skipLabel(skipReasons[commit.sha])}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
 
-      {isEmpty && (
-        <Typography variant="body2" color="text.secondary">
-          Нажмите «Добавить», чтобы загрузить коммиты.
-        </Typography>
-      )}
+        {phase === "conflict" && (
+          <Alert severity="warning" sx={{ width: "100%" }}>
+            <Typography variant="body2">
+              Конфликт при применении{" "}
+              {commits.find((c) => statuses[c.sha] === "conflict")?.shortSha ??
+                "коммита"}
+              . Разрешите конфликт во вкладке Source Control, затем нажмите
+              «Продолжить».
+            </Typography>
+            {conflictFiles.length > 0 && (
+              <Typography variant="caption" component="div">
+                Файлы: {conflictFiles.join(", ")}
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                type="button"
+                onClick={openConflicts}
+              >
+                Открыть конфликты
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                type="button"
+                onClick={continueAfterConflict}
+              >
+                Продолжить
+              </Button>
+              <Button
+                size="small"
+                color="error"
+                type="button"
+                onClick={abort}
+              >
+                Прервать
+              </Button>
+            </Stack>
+          </Alert>
+        )}
+
+        {phase === "error" && applyError && (
+          <Alert severity="error" sx={{ width: "100%" }}>
+            {applyError}
+          </Alert>
+        )}
+
+        {commits.length > 0 && (
+          <Button
+            variant="contained"
+            type="button"
+            disabled={loading || !canApply}
+            sx={{ textTransform: "none" }}
+            onClick={apply}
+            size="small"
+          >
+            {phase === "running" ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : (
+              "Применить"
+            )}
+          </Button>
+        )}
+      </FlexBox>
     </Box>
   );
 }

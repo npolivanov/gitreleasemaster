@@ -57,7 +57,7 @@ export interface ResolvedCommitItem {
 }
 
 /** Реальный коммит, разрешённый из введённого пользователем query (SHA/сообщение). */
-export type ResolvedCommit = Record<string, Partial<ResolvedCommitItem>>;
+export type ResolvedCommit = Record<string, ResolvedCommitItem>;
 
 /**
  * Результат разрешения списка коммитов.
@@ -67,6 +67,33 @@ export type ResolvedCommit = Record<string, Partial<ResolvedCommitItem>>;
 export type ResolveCommitsResult =
   | { ok: true; resolved: ResolvedCommit; notFound: string[] }
   | { ok: false; message: string };
+
+/** Результат cherry-pick одного коммита. `sha` — эхо запроса. */
+export interface CherryPickResult {
+  sha: string;
+  status: "applied" | "skipped" | "conflict" | "error";
+  /** Конфликтующие файлы (для status === "conflict"). */
+  files: string[];
+  /** Текст ошибки (для status === "error"). */
+  message: string;
+  /** Ветка, на которой выполнен cherry-pick. */
+  branch: string;
+  /** Причина пропуска (для status === "skipped"). */
+  skippedReason?: "in-branch" | "empty-patch";
+}
+
+/** Результат `cherry-pick --continue` после ручного резолва конфликта. */
+export interface CherryPickContinueResult {
+  status: "applied" | "conflict" | "error";
+  files: string[];
+  message: string;
+}
+
+/** Результат `cherry-pick --abort`. */
+export interface CherryPickAbortResult {
+  ok: boolean;
+  message: string;
+}
 
 /** Messages sent from the webview to the extension host. */
 export type OutboundMessage =
@@ -82,6 +109,10 @@ export type OutboundMessage =
       command: "resolveCommits";
       data: { upstreamBranch: string; queries: string[] };
     }
+  | { command: "cherryPick"; data: { sha: string; branch?: string } }
+  | { command: "cherryPickContinue" }
+  | { command: "cherryPickAbort" }
+  | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
   | { command: "noopCreateRelease" };
@@ -93,4 +124,7 @@ export type InboundMessage =
   | { command: "releaseBranchCreated" }
   | { command: "releaseBranchError"; data: { message: string } }
   | { command: "commitsResolved"; data: ResolveCommitsResult }
+  | { command: "cherryPickResult"; data: CherryPickResult }
+  | { command: "cherryPickContinueResult"; data: CherryPickContinueResult }
+  | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };

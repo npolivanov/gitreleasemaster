@@ -7,6 +7,10 @@ import { handleGetAllBranches } from "./commands/handleGetAllBranches";
 import { handleCreateReleaseBranch } from "./commands/handleCreateReleaseBranch";
 import { handleUseSourceBranch } from "./commands/handleUseSourceBranch";
 import { handleResolveCommits } from "./commands/handleResolveCommits";
+import { handleCherryPick } from "./commands/handleCherryPick";
+import { handleCherryPickContinue } from "./commands/handleCherryPickContinue";
+import { handleCherryPickAbort } from "./commands/handleCherryPickAbort";
+import { handleOpenScmView } from "./commands/handleOpenScmView";
 
 /**
  * Маршрутизатор входящих сообщений от вебвюя.
@@ -38,6 +42,22 @@ export async function dispatchCommand(
 
     case "resolveCommits":
       await handleResolveCommits(message, deps);
+      return;
+
+    case "cherryPick":
+      await handleCherryPick(message, deps);
+      return;
+
+    case "cherryPickContinue":
+      await handleCherryPickContinue(deps);
+      return;
+
+    case "cherryPickAbort":
+      await handleCherryPickAbort(deps);
+      return;
+
+    case "openScmView":
+      await handleOpenScmView();
       return;
 
     case "getSettings":

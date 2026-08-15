@@ -5,10 +5,16 @@ import {
   createReleaseBranch,
   checkoutExistingBranch,
   resolveCommits,
+  cherryPickCommit,
+  cherryPickContinue,
+  cherryPickAbort,
   type ListBranchesResult,
   type BranchSearchResult,
   type CreateBranchResult,
   type ResolveCommitsResult,
+  type CherryPickResult,
+  type CherryPickContinueResult,
+  type CherryPickAbortResult,
 } from "../git";
 import { readSettings } from "./settings";
 
@@ -117,4 +123,52 @@ export async function safeResolveCommits(
     };
   }
   return resolveCommits(cwd, upstreamBranch, queries);
+}
+
+/**
+ * Применить один коммит через cherry-pick на ветку `branch`.
+ *
+ * Если `branch` задан и не является текущей — хост переключится на неё перед
+ * применением. Если папка не открыта — возвращаем ошибку в формате результата.
+ */
+export async function safeCherryPick(
+  sha: string,
+  branch?: string,
+): Promise<CherryPickResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      sha,
+      status: "error",
+      files: [],
+      message: "Open a folder that contains a Git repository.",
+      branch: "",
+    };
+  }
+  return cherryPickCommit(cwd, sha, branch);
+}
+
+/** Завершить cherry-pick после ручного резолва конфликта. */
+export async function safeCherryPickContinue(): Promise<CherryPickContinueResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      status: "error",
+      files: [],
+      message: "Open a folder that contains a Git repository.",
+    };
+  }
+  return cherryPickContinue(cwd);
+}
+
+/** Отменить незавершённый cherry-pick. */
+export async function safeCherryPickAbort(): Promise<CherryPickAbortResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      ok: false,
+      message: "Open a folder that contains a Git repository.",
+    };
+  }
+  return cherryPickAbort(cwd);
 }

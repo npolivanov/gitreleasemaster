@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { Box, Button, Divider } from "@mui/material";
 import { UnstagedCommitsList } from "./unstaged";
@@ -101,6 +101,19 @@ export function Commits({ releaseCtx }: CommitsProps) {
     });
   };
 
+  const sortedCommits = useMemo(
+    () =>
+      Object.entries(resolved)
+        ?.map(([sha, commitData]) => ({
+          sha,
+          ...commitData,
+        }))
+        ?.sort(
+          (a, b) => new Date(a?.date).getTime() - new Date(b.date).getTime(),
+        ),
+    [resolved],
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <FlexBox
@@ -118,29 +131,30 @@ export function Commits({ releaseCtx }: CommitsProps) {
             add={handleAdd}
             control={control}
           />
-          {!isDeleteMode && (
-            <Box sx={{ padding: "0 10px", mt: 1 }}>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={loading}
-                sx={{ textTransform: "none" }}
-              >
-                Добавить
-              </Button>
-            </Box>
-          )}
+
+          <Box sx={{ padding: "0 10px", mt: 1 }}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading}
+              sx={{ textTransform: "none" }}
+              size="small"
+            >
+              Добавить
+            </Button>
+          </Box>
         </Box>
 
         <Divider orientation="vertical" flexItem />
 
         <Box sx={{ width: "100%" }}>
           <CommitsPreview
-            commits={resolved}
+            commits={sortedCommits}
             loading={loading}
             error={error}
             notFound={notFound}
             title="Коммиты для добавления"
+            branch={releaseCtx?.branch}
           />
         </Box>
 
