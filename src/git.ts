@@ -443,13 +443,6 @@ export interface CherryPickResult {
   skippedReason?: CherryPickSkipReason;
 }
 
-/** Результат `git cherry-pick --continue` после ручного резолва конфликта. */
-export interface CherryPickContinueResult {
-  status: "applied" | "conflict" | "error";
-  files: string[];
-  message: string;
-}
-
 /** Результат `git cherry-pick --abort`. */
 export interface CherryPickAbortResult {
   ok: boolean;
@@ -480,12 +473,15 @@ async function getConflictedFiles(
 /**
  * Существует ли незавершённый cherry-pick (файл CHERRY_PICK_HEAD).
  * Признак того, что sequencer активен и ждёт резолва/continue.
+ *
+ * Обычный `rev-parse CHERRY_PICK_HEAD` без `-q --verify`: бросает исключение,
+ * когда файла нет (проверено эмпирически), и возвращает sha, когда есть.
  */
 async function hasCherryPickHead(
   git: ReturnType<typeof simpleGit>,
 ): Promise<boolean> {
   try {
-    await git.raw(["rev-parse", "-q", "--verify", "CHERRY_PICK_HEAD"]);
+    await git.raw(["rev-parse", "CHERRY_PICK_HEAD"]);
     return true;
   } catch {
     return false;
@@ -496,19 +492,21 @@ async function hasCherryPickHead(
  * Применить один коммит через `git cherry-pick` на ветку `expectedBranch`.
  *
  * Если передан `expectedBranch` и текущая ветка отличается — хост сначала
- * переключается на неё (`git checkout`). Это гарантирует, что коммиты попадают
- * именно в релизную ветку, даже если пользователь переключал ветки между
- * шагами wizard'а.
+ * переключается на неё (`git checkout`).
  *
- * Порядок проверок:
- *   0. Убедиться, что активна `expectedBranch` (иначе — checkout).
- *   1. Коммит уже в истории HEAD (`merge-base --is-ancestor`) → "skipped"
- *      с причиной "in-branch".
- *   2. `cherry-pick` успешен → "applied".
- *   3. Ошибка: конфликт (unmerged-файлы, CHERRY_PICK_HEAD или «already in
- *      progress») → "conflict" (+ файлы для UI). Патч пуст (изменения уже
- *      применены) → `--skip` и "skipped" с причиной "empty-patch".
- *      Иначе → "error".
+ * ПРОСТАЯ логика — без пре-чеков, которые могут ложно пометить коммит
+ * пропущенным:
+ *   1. Если остался незавершённый cherry-pick от прошлого конфликта —
+ *      доводим его `cherry-pick --continue` (пользователь уже зарезолвил).
+ *      Если доведённый коммит — это наш `sha`, возвращаем "applied".
+ *   2. `git cherry-pick <sha>`:
+ *      успех → "applied";
+ *      конфликт (unmerged-файлы / CHERRY_PICK_HEAD / already in progress) →
+ *        "conflict" (+ файлы) — очередь останавливается, пользователь
+ *        резолвит в VS Code и жмёт «Заново»;
+ *      пустой патч (изменения уже применены) → "skipped" с причиной
+ *        "empty-patch" — единственный честный случай пропуска;
+ *      иначе → "error".
  */
 export async function cherryPickCommit(
   cwd: string,
@@ -558,19 +556,54 @@ export async function cherryPickCommit(
     }
   }
 
-  // 1. Коммит уже входит в историю текущей ветки — пропускаем.
+  // 1. Незавершённый cherry-pick от прошлого конфликта: пользователь зарезолвил
+  //    и нажал «Заново» — доводим pending-коммит сами. Если это был наш sha,
+  //    он применён — возвращаем "applied" без повторного pick.
+  let pendingSha: string | null = null;
   try {
-    await git.raw(["merge-base", "--is-ancestor", sha, "HEAD"]);
-    return {
-      sha,
-      status: "skipped",
-      files: [],
-      message: "",
-      branch: currentBranch,
-      skippedReason: "in-branch",
-    };
+    pendingSha = (await git.raw(["rev-parse", "CHERRY_PICK_HEAD"])).trim();
   } catch {
-    // не предок HEAD — это нормально, применяем cherry-pick
+    pendingSha = null; // sequencer не активен
+  }
+
+  if (pendingSha) {
+    const unresolved = await getConflictedFiles(git);
+    if (unresolved.length > 0) {
+      // Пользователь ещё не зарезолвил прошлый конфликт.
+      return {
+        sha: pendingSha,
+        status: "conflict",
+        files: unresolved,
+        message: "",
+        branch: currentBranch,
+      };
+    }
+
+    try {
+      await git.raw(["cherry-pick", "--continue"]);
+      if (pendingSha === sha) {
+        return {
+          sha,
+          status: "applied",
+          files: [],
+          message: "",
+          branch: currentBranch,
+        };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const files = await getConflictedFiles(git);
+      if (files.length > 0) {
+        return {
+          sha: pendingSha,
+          status: "conflict",
+          files,
+          message: "",
+          branch: currentBranch,
+        };
+      }
+      return { sha, status: "error", files: [], message, branch: currentBranch };
+    }
   }
 
   // 2. Сам cherry-pick.
@@ -590,12 +623,10 @@ export async function cherryPickCommit(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
-    // 3a. Конфликт: unmerged-файлы в рабочем дереве, активный sequencer
-    //     (CHERRY_PICK_HEAD) или cherry-pick поверх незавершённого.
-    const alreadyInProgress = /already in progress/i.test(message);
+    // 2a. Реальный конфликт: unmerged-файлы в рабочем дереве.
+    //     Проверяется ПЕРВЫМ — при пустом pick файлы тоже пусты.
     const files = await getConflictedFiles(git);
-    const sequencerActive = await hasCherryPickHead(git);
-    if (files.length > 0 || sequencerActive || alreadyInProgress) {
+    if (files.length > 0) {
       return {
         sha,
         status: "conflict",
@@ -605,8 +636,9 @@ export async function cherryPickCommit(
       };
     }
 
-    // 3b. Пустой патч — изменения уже применены другим коммитом.
-    //     Git оставляет sequencer в незавершённом состоянии — чистим через --skip.
+    // 2b. Пустой патч — изменения уже применены (сообщение git подтверждает).
+    //     ВАЖНО: до sequencer-детекта — пустой pick тоже активирует sequencer.
+    //     Sequencer при этом остаётся — чистим через --skip.
     if (/nothing to commit|now empty|allow-empty/i.test(message)) {
       try {
         await git.raw(["cherry-pick", "--skip"]);
@@ -623,41 +655,21 @@ export async function cherryPickCommit(
       };
     }
 
-    // 3c. Прочая ошибка git.
+    // 2c. Незавершённый sequencer от другого конфликта или «already in
+    //     progress» — тоже конфликтное состояние (требует резолва/«Заново»).
+    const alreadyInProgress = /already in progress/i.test(message);
+    if (alreadyInProgress || (await hasCherryPickHead(git))) {
+      return {
+        sha,
+        status: "conflict",
+        files: [],
+        message: "",
+        branch: currentBranch,
+      };
+    }
+
+    // 2d. Прочая ошибка git.
     return { sha, status: "error", files: [], message, branch: currentBranch };
-  }
-}
-
-/**
- * Завершить cherry-pick после ручного разрешения конфликта пользователем
- * (`git cherry-pick --continue`). Если конфликты ещё не зарезолвлены —
- * вернёт "conflict" снова (пользователь может продолжать пытаться).
- *
- * Редактор не нужен: cherry-pick без `--edit` использует сообщение
- * оригинального коммита как есть (подтверждено синтетическим тестом),
- * а `-c core.editor=...` в git ≥ 2.48 фатально запрещён — не используем его.
- */
-export async function cherryPickContinue(
-  cwd: string,
-): Promise<CherryPickContinueResult> {
-  const git = simpleGit({ baseDir: cwd });
-
-  try {
-    await git.raw(["cherry-pick", "--continue"]);
-    return { status: "applied", files: [], message: "" };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-
-    const files = await getConflictedFiles(git);
-    if (files.length > 0) {
-      return { status: "conflict", files, message: "" };
-    }
-    // Sequencer ещё активен (не всё зарезолвлено/застажено) — остаёмся в конфликте.
-    if (await hasCherryPickHead(git)) {
-      return { status: "conflict", files: [], message: "" };
-    }
-
-    return { status: "error", files: [], message };
   }
 }
 

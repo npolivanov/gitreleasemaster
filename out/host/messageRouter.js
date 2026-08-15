@@ -10,7 +10,6 @@ const handleCreateReleaseBranch_1 = require("./commands/handleCreateReleaseBranc
 const handleUseSourceBranch_1 = require("./commands/handleUseSourceBranch");
 const handleResolveCommits_1 = require("./commands/handleResolveCommits");
 const handleCherryPick_1 = require("./commands/handleCherryPick");
-const handleCherryPickContinue_1 = require("./commands/handleCherryPickContinue");
 const handleCherryPickAbort_1 = require("./commands/handleCherryPickAbort");
 const handleOpenScmView_1 = require("./commands/handleOpenScmView");
 /**
@@ -39,9 +38,6 @@ async function dispatchCommand(message, deps) {
             return;
         case "cherryPick":
             await (0, handleCherryPick_1.handleCherryPick)(message, deps);
-            return;
-        case "cherryPickContinue":
-            await (0, handleCherryPickContinue_1.handleCherryPickContinue)(deps);
             return;
         case "cherryPickAbort":
             await (0, handleCherryPickAbort_1.handleCherryPickAbort)(deps);

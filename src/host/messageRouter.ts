@@ -8,7 +8,6 @@ import { handleCreateReleaseBranch } from "./commands/handleCreateReleaseBranch"
 import { handleUseSourceBranch } from "./commands/handleUseSourceBranch";
 import { handleResolveCommits } from "./commands/handleResolveCommits";
 import { handleCherryPick } from "./commands/handleCherryPick";
-import { handleCherryPickContinue } from "./commands/handleCherryPickContinue";
 import { handleCherryPickAbort } from "./commands/handleCherryPickAbort";
 import { handleOpenScmView } from "./commands/handleOpenScmView";
 
@@ -46,10 +45,6 @@ export async function dispatchCommand(
 
     case "cherryPick":
       await handleCherryPick(message, deps);
-      return;
-
-    case "cherryPickContinue":
-      await handleCherryPickContinue(deps);
       return;
 
     case "cherryPickAbort":

@@ -64,6 +64,12 @@ function activate(context) {
 function openWebviewPanel(context) {
     const panel = vscode.window.createWebviewPanel("gitReleaseMasterPanel", "Git Release Master", vscode.ViewColumn.One, {
         enableScripts: true,
+        // Не выгружать webview при переключении вкладок (например, когда
+        // пользователь уходит в Source Control резолвить конфликты cherry-pick):
+        // иначе при возврате приложение перезагружается с нуля и wizard
+        // сбрасывается на главный экран. Платим памятью — для панели инструмента
+        // это приемлемо.
+        retainContextWhenHidden: true,
         localResourceRoots: [
             vscode.Uri.file(path.join(context.extensionPath, "dist", "webview")),
         ],

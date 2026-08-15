@@ -5,7 +5,6 @@ import type {
   BranchSearchResult,
   ResolveCommitsResult,
   CherryPickResult,
-  CherryPickContinueResult,
   CherryPickAbortResult,
 } from "../git";
 
@@ -18,7 +17,6 @@ export type InboundMessage =
   | { command: "useSourceBranch"; data: { fromBranch: string } }
   | { command: "resolveCommits"; data: { upstreamBranch: string; queries: string[] } }
   | { command: "cherryPick"; data: { sha: string; branch?: string } }
-  | { command: "cherryPickContinue" }
   | { command: "cherryPickAbort" }
   | { command: "openScmView" }
   | { command: "getSettings" }
@@ -33,7 +31,6 @@ export type OutboundMessage =
   | { command: "releaseBranchError"; data: { message: string } }
   | { command: "commitsResolved"; data: ResolveCommitsResult }
   | { command: "cherryPickResult"; data: CherryPickResult }
-  | { command: "cherryPickContinueResult"; data: CherryPickContinueResult }
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };
 

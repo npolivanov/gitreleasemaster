@@ -6,7 +6,6 @@ exports.safeCreateReleaseBranch = safeCreateReleaseBranch;
 exports.safeUseSourceBranch = safeUseSourceBranch;
 exports.safeResolveCommits = safeResolveCommits;
 exports.safeCherryPick = safeCherryPick;
-exports.safeCherryPickContinue = safeCherryPickContinue;
 exports.safeCherryPickAbort = safeCherryPickAbort;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
@@ -122,18 +121,6 @@ async function safeCherryPick(sha, branch) {
         };
     }
     return (0, git_1.cherryPickCommit)(cwd, sha, branch);
-}
-/** Завершить cherry-pick после ручного резолва конфликта. */
-async function safeCherryPickContinue() {
-    const cwd = (0, git_1.getWorkspaceCwd)();
-    if (!cwd) {
-        return {
-            status: "error",
-            files: [],
-            message: "Open a folder that contains a Git repository.",
-        };
-    }
-    return (0, git_1.cherryPickContinue)(cwd);
 }
 /** Отменить незавершённый cherry-pick. */
 async function safeCherryPickAbort() {

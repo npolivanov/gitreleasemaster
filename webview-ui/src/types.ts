@@ -82,13 +82,6 @@ export interface CherryPickResult {
   skippedReason?: "in-branch" | "empty-patch";
 }
 
-/** Результат `cherry-pick --continue` после ручного резолва конфликта. */
-export interface CherryPickContinueResult {
-  status: "applied" | "conflict" | "error";
-  files: string[];
-  message: string;
-}
-
 /** Результат `cherry-pick --abort`. */
 export interface CherryPickAbortResult {
   ok: boolean;
@@ -110,7 +103,6 @@ export type OutboundMessage =
       data: { upstreamBranch: string; queries: string[] };
     }
   | { command: "cherryPick"; data: { sha: string; branch?: string } }
-  | { command: "cherryPickContinue" }
   | { command: "cherryPickAbort" }
   | { command: "openScmView" }
   | { command: "getSettings" }
@@ -125,6 +117,5 @@ export type InboundMessage =
   | { command: "releaseBranchError"; data: { message: string } }
   | { command: "commitsResolved"; data: ResolveCommitsResult }
   | { command: "cherryPickResult"; data: CherryPickResult }
-  | { command: "cherryPickContinueResult"; data: CherryPickContinueResult }
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };

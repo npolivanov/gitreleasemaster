@@ -72,7 +72,8 @@ function StatusIcon({ status }: { status?: CommitApplyStatus }) {
  * ветку (см. `useApplyCommits`): каждый пункт получает статус — loader на
  * активном, галочка на пройденном, предупреждение на конфликте. При конфликте
  * процесс останавливается и ждёт ручного резолва в VS Code (Source Control),
- * после чего можно продолжить или прервать.
+ * после чего нажимается «Заново» — применение перезапускается с первого
+ * пункта, хост сам доводит незавершённый cherry-pick.
  */
 export function CommitsPreview({
   commits,
@@ -90,7 +91,7 @@ export function CommitsPreview({
     applyBranch,
     skipReasons,
     apply,
-    continueAfterConflict,
+    restart,
     abort,
     openConflicts,
   } = useApplyCommits(commits, branch);
@@ -207,8 +208,9 @@ export function CommitsPreview({
               Конфликт при применении{" "}
               {commits.find((c) => statuses[c.sha] === "conflict")?.shortSha ??
                 "коммита"}
-              . Разрешите конфликт во вкладке Source Control, затем нажмите
-              «Продолжить».
+              . Разрешите конфликт во вкладке Source Control (застейджите
+              файлы или закоммитьте — как удобно), затем нажмите «Заново» —
+              применение продолжится.
             </Typography>
             {conflictFiles.length > 0 && (
               <Typography variant="caption" component="div">
@@ -228,9 +230,9 @@ export function CommitsPreview({
                 size="small"
                 variant="contained"
                 type="button"
-                onClick={continueAfterConflict}
+                onClick={restart}
               >
-                Продолжить
+                Заново
               </Button>
               <Button
                 size="small"

@@ -35,9 +35,13 @@ export interface UseApplyCommitsResult {
   skipReasons: Record<string, SkipReason>;
   /** Начать применение: по порядку, от старых к новым. */
   apply: () => void;
-  /** Продолжить после ручного резолва конфликта (`cherry-pick --continue`). */
-  continueAfterConflict: () => void;
-  /** Прервать незавершённый cherry-pick (`cherry-pick --abort`). */
+  /**
+   * Заново начать применение с первого пункта — после ручного резолва
+   * конфликта в VS Code. Хост сам доведёт незавершённый cherry-pick и
+   * пропустит уже применённые коммиты.
+   */
+  restart: () => void;
+  /** Прервать незавершённый cherry-pick (`git cherry-pick --abort`). */
   abort: () => void;
   /** Открыть вкладку Source Control в VS Code (для резолва конфликтов). */
   openConflicts: () => void;
@@ -54,9 +58,11 @@ export interface UseApplyCommitsResult {
  * Управляет очередью: для каждого коммита шлёт `cherryPick` и по ответу
  * `cherryPickResult` двигается дальше:
  *   applied → пункт «пройден», следующий;
- *   skipped → пункт «пропущен» (уже в ветке / пустой патч), следующий;
+ *   skipped → пункт «пропущен» (пустой патч — изменения уже применены),
+ *             следующий;
  *   conflict → стоп, фаза "conflict" (пользователь резолвит в VS Code,
- *              затем `continueAfterConflict`);
+ *              затем `restart` — применение начинается заново, хост сам
+ *              доводит незавершённый cherry-pick);
  *   error    → стоп, фаза "error".
  *
  * Подписка `onMessage` создаётся один раз (mount-once); актуальные очередь и
@@ -138,7 +144,7 @@ export function useApplyCommits(
           skippedReason,
         } = message.data;
 
-        console.log("status >>>>", status);
+        console.log("cherryPick status >>>>", status);
         setApplyBranch(message.data.branch || null);
 
         if (status === "applied") {
@@ -161,41 +167,6 @@ export function useApplyCommits(
         return;
       }
 
-      if (message.command === "cherryPickContinueResult") {
-        if (phaseRef.current !== "conflict") return; // устаревший ответ
-        const { status, files, message: msg } = message.data;
-        const currentSha = queueRef.current[idxRef.current];
-
-        if (status === "applied") {
-          setConflictFiles([]);
-          // Текущий конфликтный коммит завершён — продолжаем очередь.
-          setStatuses((prev) => ({ ...prev, [currentSha]: "done" }));
-
-          const nextIdx = idxRef.current + 1;
-          if (nextIdx >= queueRef.current.length) {
-            idxRef.current = nextIdx;
-            setPhaseBoth("idle");
-            return;
-          }
-          idxRef.current = nextIdx;
-          const nextSha = queueRef.current[nextIdx];
-          setStatuses((prev) => ({ ...prev, [nextSha]: "in-progress" }));
-          setPhaseBoth("running");
-          sendPick(nextSha);
-          return;
-        }
-        if (status === "conflict") {
-          // Пользователь ещё не зарезолвил всё — остаёмся в конфликте.
-          setConflictFiles(files);
-          return;
-        }
-        setStatuses((prev) => ({ ...prev, [currentSha]: "error" }));
-        setConflictFiles([]);
-        setError(msg);
-        setPhaseBoth("error");
-        return;
-      }
-
       if (message.command === "cherryPickAborted") {
         if (phaseRef.current !== "conflict") return;
         const currentSha = queueRef.current[idxRef.current];
@@ -210,7 +181,7 @@ export function useApplyCommits(
       }
     });
     return unsubscribe;
-  }, [advanceAfterDone, sendPick, setPhaseBoth]);
+  }, [advanceAfterDone, setPhaseBoth]);
 
   // При изменении списка коммитов (повторное «Добавить») — сброс статусов,
   // но только если процесс не активен.
@@ -221,6 +192,43 @@ export function useApplyCommits(
     setConflictFiles([]);
     setError(null);
   }, [commits]);
+
+  /** Запустить применение с указанного индекса; пункты до него не трогаем. */
+  const applyFrom = useCallback(
+    (startIdx: number) => {
+      if (commits.length === 0) return;
+
+      const queue = commits.map((c) => c.sha);
+      queueRef.current = queue;
+
+      if (startIdx >= queue.length) {
+        // Начинать не с чего — всё уже пройдено.
+        idxRef.current = queue.length;
+        setConflictFiles([]);
+        setPhaseBoth("idle");
+        return;
+      }
+
+      idxRef.current = startIdx;
+
+      // Пункты до startIdx сохраняют статусы (done/skipped), начиная с него —
+      // сброс в pending.
+      setStatuses((prev) => {
+        const next = { ...prev };
+        for (let i = startIdx; i < queue.length; i++) {
+          next[queue[i]] = "pending";
+        }
+        next[queue[startIdx]] = "in-progress";
+        return next;
+      });
+
+      setConflictFiles([]);
+      setError(null);
+      setPhaseBoth("running");
+      sendPick(queue[startIdx]);
+    },
+    [commits, sendPick, setPhaseBoth],
+  );
 
   const apply = useCallback(() => {
     if (commits.length === 0) return;
@@ -241,10 +249,31 @@ export function useApplyCommits(
     sendPick(queue[0]);
   }, [commits, sendPick, setPhaseBoth]);
 
-  const continueAfterConflict = useCallback(() => {
-    if (phaseRef.current !== "conflict") return;
-    postMessage({ command: "cherryPickContinue" });
-  }, []);
+  /**
+   * «Заново» после конфликта: доверяем, что пользователь зарезолвил конфликт
+   * (алерт это просит), помечаем конфликтный пункт пройденным и продолжаем
+   * СО СЛЕДУЮЩЕГО пункта — как в терминальном флоу.
+   *
+   * Если пользователь на самом деле НЕ зарезолвил — хост увидит незавершённый
+   * cherry-pick с unmerged-файлами и вернёт conflict для того же sha: UI снова
+   * покажет конфликт (самовосстановление).
+   */
+  const restart = useCallback(() => {
+    const conflictIdx = commits.findIndex(
+      (c) => statuses[c.sha] === "conflict",
+    );
+
+    if (conflictIdx === -1) {
+      apply();
+      return;
+    }
+
+    setStatuses((prev) => ({
+      ...prev,
+      [commits[conflictIdx].sha]: "done",
+    }));
+    applyFrom(conflictIdx + 1);
+  }, [apply, applyFrom, commits, statuses]);
 
   const abort = useCallback(() => {
     if (phaseRef.current !== "conflict") return;
@@ -263,7 +292,7 @@ export function useApplyCommits(
     applyBranch,
     skipReasons,
     apply,
-    continueAfterConflict,
+    restart,
     abort,
     openConflicts,
   };

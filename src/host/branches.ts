@@ -6,14 +6,12 @@ import {
   checkoutExistingBranch,
   resolveCommits,
   cherryPickCommit,
-  cherryPickContinue,
   cherryPickAbort,
   type ListBranchesResult,
   type BranchSearchResult,
   type CreateBranchResult,
   type ResolveCommitsResult,
   type CherryPickResult,
-  type CherryPickContinueResult,
   type CherryPickAbortResult,
 } from "../git";
 import { readSettings } from "./settings";
@@ -146,19 +144,6 @@ export async function safeCherryPick(
     };
   }
   return cherryPickCommit(cwd, sha, branch);
-}
-
-/** Завершить cherry-pick после ручного резолва конфликта. */
-export async function safeCherryPickContinue(): Promise<CherryPickContinueResult> {
-  const cwd = getWorkspaceCwd();
-  if (!cwd) {
-    return {
-      status: "error",
-      files: [],
-      message: "Open a folder that contains a Git repository.",
-    };
-  }
-  return cherryPickContinue(cwd);
 }
 
 /** Отменить незавершённый cherry-pick. */
