@@ -76,9 +76,6 @@ export function Commits({ releaseCtx }: CommitsProps) {
   }, []);
 
   const onSubmit = (data: CreateReleaseFormValues) => {
-    // Режим удаления в этой задаче не реализован.
-    if (data.isDeleteMode) return;
-
     const queries = data.commits
       .map((c) => c.value.trim())
       .filter((v) => v !== "");
@@ -88,8 +85,18 @@ export function Commits({ releaseCtx }: CommitsProps) {
       return;
     }
 
-    if (data.upstreamBranch.trim() === "") {
-      setError("Выберите upstream-ветку.");
+    // Ветвь резолва по режиму: добавление — upstream, удаление — сама
+    // релизная ветка (удаляем коммиты из неё, значит и ищем в ней).
+    const branch = data.isDeleteMode
+      ? releaseCtx?.branch
+      : data.upstreamBranch;
+
+    if (!branch || branch.trim() === "") {
+      setError(
+        data.isDeleteMode
+          ? "Релизная ветка не определена."
+          : "Выберите upstream-ветку.",
+      );
       return;
     }
 
@@ -97,10 +104,12 @@ export function Commits({ releaseCtx }: CommitsProps) {
     setLoading(true);
     postMessage({
       command: "resolveCommits",
-      data: { upstreamBranch: data.upstreamBranch, queries },
+      data: { branch, queries },
     });
   };
 
+  // Порядок применения: добавление — от старых к новым; удаление (revert) —
+  // от новых к старым (обратный порядок, как при revert из терминала).
   const sortedCommits = useMemo(
     () =>
       Object.entries(resolved)
@@ -108,10 +117,11 @@ export function Commits({ releaseCtx }: CommitsProps) {
           sha,
           ...commitData,
         }))
-        ?.sort(
-          (a, b) => new Date(a?.date).getTime() - new Date(b.date).getTime(),
-        ),
-    [resolved],
+        ?.sort((a, b) => {
+          const diff = new Date(a?.date).getTime() - new Date(b.date).getTime();
+          return isDeleteMode ? -diff : diff;
+        }),
+    [resolved, isDeleteMode],
   );
 
   return (
@@ -147,26 +157,32 @@ export function Commits({ releaseCtx }: CommitsProps) {
 
         <Divider orientation="vertical" flexItem />
 
-        <Box sx={{ width: "100%" }}>
-          <CommitsPreview
-            commits={sortedCommits}
-            loading={loading}
-            error={error}
-            notFound={notFound}
-            title="Коммиты для добавления"
-            branch={releaseCtx?.branch}
-          />
-        </Box>
+        {!isDeleteMode && (
+          <Box sx={{ width: "100%" }}>
+            <CommitsPreview
+              commits={sortedCommits}
+              loading={loading}
+              error={error}
+              notFound={notFound}
+              title="Коммиты для добавления"
+              branch={releaseCtx?.branch}
+            />
+          </Box>
+        )}
 
-        {/* <Box sx={{ width: "100%" }}>
-          <CommitsPreview
-            commits={resolved}
-            loading={loading}
-            error={error}
-            notFound={notFound}
-            title="Коммиты для удаление"
-          />
-        </Box> */}
+        {isDeleteMode && (
+          <Box sx={{ width: "100%" }}>
+            <CommitsPreview
+              commits={sortedCommits}
+              loading={loading}
+              error={error}
+              notFound={notFound}
+              title="Коммиты для удаления"
+              branch={releaseCtx?.branch}
+              mode="revert"
+            />
+          </Box>
+        )}
       </FlexBox>
     </form>
   );

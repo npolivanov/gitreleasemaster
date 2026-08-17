@@ -15,9 +15,11 @@ export type InboundMessage =
   | { command: "getAllBranches" }
   | { command: "createReleaseBranch"; data: { fromBranch: string; releaseName: string } }
   | { command: "useSourceBranch"; data: { fromBranch: string } }
-  | { command: "resolveCommits"; data: { upstreamBranch: string; queries: string[] } }
+  | { command: "resolveCommits"; data: { branch: string; queries: string[] } }
   | { command: "cherryPick"; data: { sha: string; branch?: string } }
   | { command: "cherryPickAbort" }
+  | { command: "revert"; data: { sha: string; branch?: string } }
+  | { command: "revertAbort" }
   | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
@@ -32,6 +34,8 @@ export type OutboundMessage =
   | { command: "commitsResolved"; data: ResolveCommitsResult }
   | { command: "cherryPickResult"; data: CherryPickResult }
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
+  | { command: "revertResult"; data: CherryPickResult }
+  | { command: "revertAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };
 
 /**

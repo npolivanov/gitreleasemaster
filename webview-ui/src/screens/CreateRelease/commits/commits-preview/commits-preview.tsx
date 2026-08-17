@@ -17,6 +17,7 @@ import type { ResolvedCommitItem } from "../../../../types";
 import { FlexBox } from "../../../../components/ui/flex-box";
 import {
   useApplyCommits,
+  type ApplyMode,
   type CommitApplyStatus,
   type SkipReason,
 } from "./use-apply-commits";
@@ -35,8 +36,10 @@ export interface CommitsPreviewProps {
   /** Исходные query, которые не удалось сопоставить коммиту. */
   notFound: string[];
   title: string;
-  /** Целевая ветка для cherry-pick (релизная ветка из Шага 1). */
+  /** Целевая ветка (релизная ветка из Шага 1). */
   branch?: string;
+  /** Режим применения: "pick" — cherry-pick (добавление), "revert" — удаление. */
+  mode?: ApplyMode;
 }
 
 /** Подпись причины пропуска пункта. */
@@ -82,6 +85,7 @@ export function CommitsPreview({
   notFound,
   title,
   branch,
+  mode,
 }: CommitsPreviewProps) {
   const {
     statuses,
@@ -94,7 +98,7 @@ export function CommitsPreview({
     restart,
     abort,
     openConflicts,
-  } = useApplyCommits(commits, branch);
+  } = useApplyCommits(commits, branch, mode);
 
   const isEmpty =
     !loading && !error && commits.length === 0 && notFound.length === 0;

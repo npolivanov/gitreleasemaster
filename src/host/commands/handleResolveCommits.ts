@@ -14,7 +14,7 @@ export async function handleResolveCommits(
   deps: HandlerDeps,
 ): Promise<void> {
   const result = await safeResolveCommits(
-    message.data.upstreamBranch,
+    message.data.branch,
     message.data.queries,
   );
 

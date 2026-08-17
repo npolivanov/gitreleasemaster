@@ -100,10 +100,12 @@ export type OutboundMessage =
   | { command: "useSourceBranch"; data: { fromBranch: string } }
   | {
       command: "resolveCommits";
-      data: { upstreamBranch: string; queries: string[] };
+      data: { branch: string; queries: string[] };
     }
   | { command: "cherryPick"; data: { sha: string; branch?: string } }
   | { command: "cherryPickAbort" }
+  | { command: "revert"; data: { sha: string; branch?: string } }
+  | { command: "revertAbort" }
   | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
@@ -118,4 +120,6 @@ export type InboundMessage =
   | { command: "commitsResolved"; data: ResolveCommitsResult }
   | { command: "cherryPickResult"; data: CherryPickResult }
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
+  | { command: "revertResult"; data: CherryPickResult }
+  | { command: "revertAborted"; data: CherryPickAbortResult }
   | { command: "settingsUpdated"; data: Settings };

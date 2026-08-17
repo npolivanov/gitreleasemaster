@@ -7,6 +7,8 @@ import {
   resolveCommits,
   cherryPickCommit,
   cherryPickAbort,
+  revertCommit,
+  revertAbort,
   type ListBranchesResult,
   type BranchSearchResult,
   type CreateBranchResult,
@@ -105,11 +107,12 @@ export async function safeUseSourceBranch(
 /**
  * Разрешить список query (SHA/сообщения) в реальные коммиты репозитория.
  *
- * Используется для наполнения правой панели экрана коммитов. Если папка не
- * открыта — возвращаем понятную ошибку.
+ * `branch` — ветка, в истории которой ищем: в режиме добавления это upstream,
+ * в режиме удаления — сама релизная ветка. Если папка не открыта — возвращаем
+ * понятную ошибку.
  */
 export async function safeResolveCommits(
-  upstreamBranch: string,
+  branch: string,
   queries: string[],
 ): Promise<ResolveCommitsResult> {
   const cwd = getWorkspaceCwd();
@@ -120,7 +123,7 @@ export async function safeResolveCommits(
       message: "Open a folder that contains a Git repository.",
     };
   }
-  return resolveCommits(cwd, upstreamBranch, queries);
+  return resolveCommits(cwd, branch, queries);
 }
 
 /**
@@ -156,4 +159,38 @@ export async function safeCherryPickAbort(): Promise<CherryPickAbortResult> {
     };
   }
   return cherryPickAbort(cwd);
+}
+
+/**
+ * Удалить один коммит из ветки `branch` через `git revert --no-edit`
+ * (режим удаления). Если `branch` задан и не является текущей — хост
+ * переключится на неё перед применением.
+ */
+export async function safeRevert(
+  sha: string,
+  branch?: string,
+): Promise<CherryPickResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      sha,
+      status: "error",
+      files: [],
+      message: "Open a folder that contains a Git repository.",
+      branch: "",
+    };
+  }
+  return revertCommit(cwd, sha, branch);
+}
+
+/** Отменить незавершённый revert. */
+export async function safeRevertAbort(): Promise<CherryPickAbortResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      ok: false,
+      message: "Open a folder that contains a Git repository.",
+    };
+  }
+  return revertAbort(cwd);
 }

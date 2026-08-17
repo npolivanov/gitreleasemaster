@@ -44,6 +44,8 @@ exports.checkoutExistingBranch = checkoutExistingBranch;
 exports.resolveCommits = resolveCommits;
 exports.cherryPickCommit = cherryPickCommit;
 exports.cherryPickAbort = cherryPickAbort;
+exports.revertAbort = revertAbort;
+exports.revertCommit = revertCommit;
 const simple_git_1 = __importDefault(require("simple-git"));
 const vscode = __importStar(require("vscode"));
 /**
@@ -249,13 +251,13 @@ async function checkoutExistingBranch(cwd, branchName) {
  *     (по всей истории репозитория, case-insensitive).
  *
  * После разрешения найденный коммит **проверяется на вхождение в
- * `upstreamBranch`** через `git merge-base --is-ancestor`. Если коммит не
+ * `branch`** через `git merge-base --is-ancestor`. Если коммит не
  * является предком выбранной ветки — он считается не найденным (попадает в
  * `notFound`). Так пользователь не добавит коммит из чужой ветки.
  *
  * Не найденные query возвращаются в `notFound`, чтобы UI их подсветил.
  */
-async function resolveCommits(cwd, upstreamBranch, queries) {
+async function resolveCommits(cwd, branch, queries) {
     const git = (0, simple_git_1.default)({ baseDir: cwd });
     let isRepo = false;
     try {
@@ -279,10 +281,10 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
             continue;
         }
         let candidateShas = [];
-        // 1. Строгий поиск частичного SHA только в истории upstreamBranch
+        // 1. Строгий поиск частичного SHA только в истории branch
         try {
-            // Получаем список ВСЕХ коммитов, являющихся предками upstreamBranch
-            const listOutput = await git.raw(["rev-list", upstreamBranch]);
+            // Получаем список ВСЕХ коммитов, являющихся предками branch
+            const listOutput = await git.raw(["rev-list", branch]);
             const allShas = listOutput.trim().split("\n").filter(Boolean);
             // Ищем совпадения по префиксу (как это делает rev-parse, но только среди наших коммитов)
             const matches = allShas.filter((sha) => sha.startsWith(query));
@@ -297,7 +299,7 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
         if (candidateShas.length === 0) {
             try {
                 const log = await git.log([
-                    upstreamBranch,
+                    branch,
                     `--grep=${query}`,
                     "-F",
                     "-i",
@@ -311,12 +313,12 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
                 // ignore — ниже попадём в notFound
             }
         }
-        // 3. Проверяем найденные кандидаты на вхождение в upstreamBranch
+        // 3. Проверяем найденные кандидаты на вхождение в branch
         let foundInUpstream = false;
         for (const hash of candidateShas) {
             try {
-                // Проверяем, является ли коммит предком upstreamBranch
-                await git.raw(["merge-base", "--is-ancestor", hash, upstreamBranch]);
+                // Проверяем, является ли коммит предком branch
+                await git.raw(["merge-base", "--is-ancestor", hash, branch]);
                 // Получаем метаданные
                 const out = await git.raw([
                     "log",
@@ -336,7 +338,7 @@ async function resolveCommits(cwd, upstreamBranch, queries) {
                 }
             }
             catch {
-                // Коммит не является предком upstreamBranch или произошла ошибка парсинга.
+                // Коммит не является предком branch или произошла ошибка парсинга.
                 // Игнорируем, продолжаем цикл (возможно, подойдут следующие хэши из grep).
             }
         }
@@ -569,6 +571,193 @@ async function cherryPickAbort(cwd) {
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { ok: false, message };
+    }
+}
+/**
+ * Отменить незавершённый revert (`git revert --abort`).
+ *
+ * Отдельная команда для режима удаления: sequencer у cherry-pick и revert
+ * общий, но режимно-корректная команда надёжнее.
+ */
+async function revertAbort(cwd) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    try {
+        await git.raw(["revert", "--abort"]);
+        return { ok: true, message: "" };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, message };
+    }
+}
+/** Существует ли незавершённый revert (файл REVERT_HEAD). */
+async function hasRevertHead(git) {
+    try {
+        await git.raw(["rev-parse", "REVERT_HEAD"]);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Удалить один коммит из ветки `expectedBranch` через `git revert --no-edit`.
+ *
+ * Зеркало `cherryPickCommit` для режима удаления, отличия:
+ *   - команда `git revert --no-edit <sha>` (`--no-edit` — валидный флаг,
+ *     отключающий редактор сообщения; конфигурация core.editor в git ≥ 2.48
+ *     запрещена, поэтому только флаг);
+ *   - pending-детект через `REVERT_HEAD`, доводка — `git revert --continue`;
+ *   - пустой патч (изменения уже отсутствуют) — `git revert --skip`.
+ *
+ * Результат — тот же контракт `CherryPickResult` (applied/skipped/conflict/
+ * error + файлы + ветка), чтобы webview переиспользовал стейт-машину.
+ */
+async function revertCommit(cwd, sha, expectedBranch) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            sha,
+            status: "error",
+            files: [],
+            message: "The open folder is not a Git repository.",
+            branch: "",
+        };
+    }
+    // 0. Гарантировать целевую (релизную) ветку.
+    let currentBranch = "";
+    try {
+        currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+    }
+    catch {
+        // не критично — продолжаем с пустым именем
+    }
+    if (expectedBranch && expectedBranch !== currentBranch) {
+        try {
+            await git.checkout(expectedBranch);
+            currentBranch = expectedBranch;
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                sha,
+                status: "error",
+                files: [],
+                message: `Не удалось переключиться на ветку «${expectedBranch}»: ${message}`,
+                branch: currentBranch,
+            };
+        }
+    }
+    // 1. Незавершённый revert от прошлого конфликта: пользователь зарезолвил
+    //    и нажал «Заново» — доводим pending-коммит сами.
+    let pendingSha = null;
+    try {
+        pendingSha = (await git.raw(["rev-parse", "REVERT_HEAD"])).trim();
+    }
+    catch {
+        pendingSha = null; // sequencer не активен
+    }
+    if (pendingSha) {
+        const unresolved = await getConflictedFiles(git);
+        if (unresolved.length > 0) {
+            return {
+                sha: pendingSha,
+                status: "conflict",
+                files: unresolved,
+                message: "",
+                branch: currentBranch,
+            };
+        }
+        try {
+            await git.raw(["revert", "--continue"]);
+            if (pendingSha === sha) {
+                return {
+                    sha,
+                    status: "applied",
+                    files: [],
+                    message: "",
+                    branch: currentBranch,
+                };
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const files = await getConflictedFiles(git);
+            if (files.length > 0) {
+                return {
+                    sha: pendingSha,
+                    status: "conflict",
+                    files,
+                    message: "",
+                    branch: currentBranch,
+                };
+            }
+            return { sha, status: "error", files: [], message, branch: currentBranch };
+        }
+    }
+    // 2. Сам revert.
+    try {
+        await git.raw(["revert", "--no-edit", sha]);
+        return {
+            sha,
+            status: "applied",
+            files: [],
+            message: "",
+            branch: currentBranch,
+        };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // 2a. Реальный конфликт: unmerged-файлы в рабочем дереве.
+        const files = await getConflictedFiles(git);
+        if (files.length > 0) {
+            return {
+                sha,
+                status: "conflict",
+                files,
+                message: "",
+                branch: currentBranch,
+            };
+        }
+        // 2b. Пустой патч — изменения уже отсутствуют (сообщение git подтверждает).
+        //     Проверяется ДО sequencer-детекта — пустой revert тоже активирует
+        //     sequencer.
+        if (/nothing to commit|now empty|allow-empty/i.test(message)) {
+            try {
+                await git.raw(["revert", "--skip"]);
+            }
+            catch {
+                // ignore — даже если --skip не нужен, считаем пропуск состоявшимся
+            }
+            return {
+                sha,
+                status: "skipped",
+                files: [],
+                message: "",
+                branch: currentBranch,
+                skippedReason: "empty-patch",
+            };
+        }
+        // 2c. Незавершённый sequencer или «already in progress».
+        const alreadyInProgress = /already in progress/i.test(message);
+        if (alreadyInProgress || (await hasRevertHead(git))) {
+            return {
+                sha,
+                status: "conflict",
+                files: [],
+                message: "",
+                branch: currentBranch,
+            };
+        }
+        // 2d. Прочая ошибка git.
+        return { sha, status: "error", files: [], message, branch: currentBranch };
     }
 }
 //# sourceMappingURL=git.js.map

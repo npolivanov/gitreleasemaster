@@ -7,6 +7,8 @@ exports.safeUseSourceBranch = safeUseSourceBranch;
 exports.safeResolveCommits = safeResolveCommits;
 exports.safeCherryPick = safeCherryPick;
 exports.safeCherryPickAbort = safeCherryPickAbort;
+exports.safeRevert = safeRevert;
+exports.safeRevertAbort = safeRevertAbort;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
 /**
@@ -89,10 +91,11 @@ async function safeUseSourceBranch(fromBranch) {
 /**
  * Разрешить список query (SHA/сообщения) в реальные коммиты репозитория.
  *
- * Используется для наполнения правой панели экрана коммитов. Если папка не
- * открыта — возвращаем понятную ошибку.
+ * `branch` — ветка, в истории которой ищем: в режиме добавления это upstream,
+ * в режиме удаления — сама релизная ветка. Если папка не открыта — возвращаем
+ * понятную ошибку.
  */
-async function safeResolveCommits(upstreamBranch, queries) {
+async function safeResolveCommits(branch, queries) {
     const cwd = (0, git_1.getWorkspaceCwd)();
     if (!cwd) {
         return {
@@ -101,7 +104,7 @@ async function safeResolveCommits(upstreamBranch, queries) {
             message: "Open a folder that contains a Git repository.",
         };
     }
-    return (0, git_1.resolveCommits)(cwd, upstreamBranch, queries);
+    return (0, git_1.resolveCommits)(cwd, branch, queries);
 }
 /**
  * Применить один коммит через cherry-pick на ветку `branch`.
@@ -132,5 +135,34 @@ async function safeCherryPickAbort() {
         };
     }
     return (0, git_1.cherryPickAbort)(cwd);
+}
+/**
+ * Удалить один коммит из ветки `branch` через `git revert --no-edit`
+ * (режим удаления). Если `branch` задан и не является текущей — хост
+ * переключится на неё перед применением.
+ */
+async function safeRevert(sha, branch) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            sha,
+            status: "error",
+            files: [],
+            message: "Open a folder that contains a Git repository.",
+            branch: "",
+        };
+    }
+    return (0, git_1.revertCommit)(cwd, sha, branch);
+}
+/** Отменить незавершённый revert. */
+async function safeRevertAbort() {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.revertAbort)(cwd);
 }
 //# sourceMappingURL=branches.js.map

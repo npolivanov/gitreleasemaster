@@ -9,6 +9,8 @@ import { handleUseSourceBranch } from "./commands/handleUseSourceBranch";
 import { handleResolveCommits } from "./commands/handleResolveCommits";
 import { handleCherryPick } from "./commands/handleCherryPick";
 import { handleCherryPickAbort } from "./commands/handleCherryPickAbort";
+import { handleRevert } from "./commands/handleRevert";
+import { handleRevertAbort } from "./commands/handleRevertAbort";
 import { handleOpenScmView } from "./commands/handleOpenScmView";
 
 /**
@@ -49,6 +51,14 @@ export async function dispatchCommand(
 
     case "cherryPickAbort":
       await handleCherryPickAbort(deps);
+      return;
+
+    case "revert":
+      await handleRevert(message, deps);
+      return;
+
+    case "revertAbort":
+      await handleRevertAbort(deps);
       return;
 
     case "openScmView":

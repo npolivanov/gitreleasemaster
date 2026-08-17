@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onMessage, postMessage } from "../../../../vscode";
+import type { CherryPickResult } from "../../../../types";
 
 /** Статус одного пункта списка при применении (cherry-pick). */
 export type CommitApplyStatus =
@@ -19,6 +20,9 @@ export type SkipReason = "in-branch" | "empty-patch";
 export interface ApplyCommitsItem {
   sha: string;
 }
+
+/** Режим применения: cherry-pick (добавление) или revert (удаление). */
+export type ApplyMode = "pick" | "revert";
 
 export interface UseApplyCommitsResult {
   /** Статус каждого коммита по sha. */
@@ -72,6 +76,7 @@ export interface UseApplyCommitsResult {
 export function useApplyCommits(
   commits: ApplyCommitsItem[],
   branch?: string,
+  mode: ApplyMode = "pick",
 ): UseApplyCommitsResult {
   const [statuses, setStatuses] = useState<Record<string, CommitApplyStatus>>(
     {},
@@ -92,16 +97,20 @@ export function useApplyCommits(
   useEffect(() => {
     branchRef.current = branch;
   }, [branch]);
+  const modeRef = useRef<ApplyMode>(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const setPhaseBoth = useCallback((next: ApplyPhase) => {
     phaseRef.current = next;
     setPhase(next);
   }, []);
 
-  /** Отправить cherry-pick для sha с текущей целевой веткой. */
+  /** Отправить команду применения (cherry-pick или revert) для sha. */
   const sendPick = useCallback((sha: string) => {
     postMessage({
-      command: "cherryPick",
+      command: modeRef.current === "revert" ? "revert" : "cherryPick",
       data: { sha, branch: branchRef.current },
     });
   }, []);
@@ -132,20 +141,24 @@ export function useApplyCommits(
   );
 
   // Единственная подписка на ответы хоста — живёт всё время монтирования.
+  // Событие и abort-команда выбираются по текущему режиму (modeRef).
   useEffect(() => {
     const unsubscribe = onMessage((message) => {
-      if (message.command === "cherryPickResult") {
-        if (phaseRef.current !== "running") return; // устаревший ответ
-        const {
-          sha,
-          status,
-          files,
-          message: msg,
-          skippedReason,
-        } = message.data;
+      const result: CherryPickResult | null =
+        modeRef.current === "revert"
+          ? message.command === "revertResult"
+            ? message.data
+            : null
+          : message.command === "cherryPickResult"
+            ? message.data
+            : null;
 
-        console.log("cherryPick status >>>>", status);
-        setApplyBranch(message.data.branch || null);
+      if (result) {
+        if (phaseRef.current !== "running") return; // устаревший ответ
+        const { sha, status, files, message: msg, skippedReason } = result;
+
+        console.log("apply status >>>>", status);
+        setApplyBranch(result.branch || null);
 
         if (status === "applied") {
           advanceAfterDone(sha, "done");
@@ -167,15 +180,23 @@ export function useApplyCommits(
         return;
       }
 
-      if (message.command === "cherryPickAborted") {
+      const abortedData =
+        modeRef.current === "revert"
+          ? message.command === "revertAborted"
+            ? message.data
+            : null
+          : message.command === "cherryPickAborted"
+            ? message.data
+            : null;
+      if (abortedData) {
         if (phaseRef.current !== "conflict") return;
         const currentSha = queueRef.current[idxRef.current];
-        if (message.data.ok) {
+        if (abortedData.ok) {
           setStatuses((prev) => ({ ...prev, [currentSha]: "pending" }));
           setConflictFiles([]);
           setPhaseBoth("idle");
         } else {
-          setError(message.data.message);
+          setError(abortedData.message);
           setPhaseBoth("error");
         }
       }
@@ -277,7 +298,9 @@ export function useApplyCommits(
 
   const abort = useCallback(() => {
     if (phaseRef.current !== "conflict") return;
-    postMessage({ command: "cherryPickAbort" });
+    postMessage({
+      command: modeRef.current === "revert" ? "revertAbort" : "cherryPickAbort",
+    });
   }, []);
 
   const openConflicts = useCallback(() => {
