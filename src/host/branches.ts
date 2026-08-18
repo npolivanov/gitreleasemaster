@@ -9,12 +9,14 @@ import {
   cherryPickAbort,
   revertCommit,
   revertAbort,
+  listBranchLog,
   type ListBranchesResult,
   type BranchSearchResult,
   type CreateBranchResult,
   type ResolveCommitsResult,
   type CherryPickResult,
   type CherryPickAbortResult,
+  type BranchLogResult,
 } from "../git";
 import { readSettings } from "./settings";
 
@@ -193,4 +195,23 @@ export async function safeRevertAbort(): Promise<CherryPickAbortResult> {
     };
   }
   return revertAbort(cwd);
+}
+
+/**
+ * Страница лога ветки (для popup с ленивой подгрузкой).
+ * Пустая `branch` означает текущую HEAD.
+ */
+export async function safeListBranchLog(
+  branch: string,
+  skip: number,
+  limit: number,
+): Promise<BranchLogResult> {
+  const cwd = getWorkspaceCwd();
+  if (!cwd) {
+    return {
+      ok: false,
+      message: "Open a folder that contains a Git repository.",
+    };
+  }
+  return listBranchLog(cwd, branch, skip, limit);
 }

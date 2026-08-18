@@ -6,6 +6,7 @@ import type {
   ResolveCommitsResult,
   CherryPickResult,
   CherryPickAbortResult,
+  BranchLogResult,
 } from "../git";
 
 /** Сообщения, приходящие от вебвюя (входящие команды). */
@@ -20,6 +21,7 @@ export type InboundMessage =
   | { command: "cherryPickAbort" }
   | { command: "revert"; data: { sha: string; branch?: string } }
   | { command: "revertAbort" }
+  | { command: "getBranchLog"; data: { branch: string; skip: number; limit: number } }
   | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
@@ -36,6 +38,7 @@ export type OutboundMessage =
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "revertResult"; data: CherryPickResult }
   | { command: "revertAborted"; data: CherryPickAbortResult }
+  | { command: "branchLogLoaded"; data: BranchLogResult }
   | { command: "settingsUpdated"; data: Settings };
 
 /**

@@ -42,6 +42,7 @@ exports.listAllBranches = listAllBranches;
 exports.createReleaseBranch = createReleaseBranch;
 exports.checkoutExistingBranch = checkoutExistingBranch;
 exports.resolveCommits = resolveCommits;
+exports.listBranchLog = listBranchLog;
 exports.cherryPickCommit = cherryPickCommit;
 exports.cherryPickAbort = cherryPickAbort;
 exports.revertAbort = revertAbort;
@@ -348,6 +349,56 @@ async function resolveCommits(cwd, branch, queries) {
         }
     }
     return { ok: true, resolved, notFound };
+}
+/**
+ * Страница лога ветки: `git log <branch> --skip=N --max-count=L+1`.
+ *
+ * Новые коммиты первыми (стандартный порядок git log). Пустая `branch`
+ * означает текущую HEAD.
+ */
+async function listBranchLog(cwd, branch, skip, limit) {
+    const git = (0, simple_git_1.default)({ baseDir: cwd });
+    let isRepo = false;
+    try {
+        isRepo = await git.checkIsRepo();
+    }
+    catch {
+        // ignore — treat as not-a-repo
+    }
+    if (!isRepo) {
+        return {
+            ok: false,
+            message: "The open folder is not a Git repository.",
+        };
+    }
+    const rev = branch.trim() === "" ? "HEAD" : branch.trim();
+    try {
+        // +1 к limit — чтобы понять, есть ли следующая страница.
+        const out = await git.raw([
+            "log",
+            rev,
+            `--skip=${Math.max(0, skip)}`,
+            `--max-count=${limit + 1}`,
+            "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s",
+        ]);
+        const lines = out.trim().split("\n").filter(Boolean);
+        const hasMore = lines.length > limit;
+        const commits = lines.slice(0, limit).map((line) => {
+            const [sha, shortSha, author, date, message] = line.split("\x1f");
+            return {
+                sha,
+                shortSha,
+                author: author ?? "",
+                date: date ?? "",
+                message: message ?? "",
+            };
+        });
+        return { ok: true, commits, hasMore };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, message };
+    }
 }
 /** Собрать список конфликтующих файлов из статуса рабочего дерева. */
 async function getConflictedFiles(git) {

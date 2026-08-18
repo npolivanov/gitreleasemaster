@@ -88,6 +88,25 @@ export interface CherryPickAbortResult {
   message: string;
 }
 
+/** Одна запись лога ветки (для popup со списком коммитов). */
+export interface BranchLogEntry {
+  /** Полный SHA (ключ записи). */
+  sha: string;
+  /** Короткий SHA. */
+  shortSha: string;
+  /** Первая строка сообщения. */
+  message: string;
+  /** Автор. */
+  author: string;
+  /** ISO-дата. */
+  date: string;
+}
+
+/** Страница лога ветки; `hasMore` — есть ли коммиты глубже. */
+export type BranchLogResult =
+  | { ok: true; commits: BranchLogEntry[]; hasMore: boolean }
+  | { ok: false; message: string };
+
 /** Messages sent from the webview to the extension host. */
 export type OutboundMessage =
   | { command: "getBranches" }
@@ -106,6 +125,7 @@ export type OutboundMessage =
   | { command: "cherryPickAbort" }
   | { command: "revert"; data: { sha: string; branch?: string } }
   | { command: "revertAbort" }
+  | { command: "getBranchLog"; data: { branch: string; skip: number; limit: number } }
   | { command: "openScmView" }
   | { command: "getSettings" }
   | { command: "updateSettings"; data: Partial<Settings> }
@@ -122,4 +142,5 @@ export type InboundMessage =
   | { command: "cherryPickAborted"; data: CherryPickAbortResult }
   | { command: "revertResult"; data: CherryPickResult }
   | { command: "revertAborted"; data: CherryPickAbortResult }
+  | { command: "branchLogLoaded"; data: BranchLogResult }
   | { command: "settingsUpdated"; data: Settings };

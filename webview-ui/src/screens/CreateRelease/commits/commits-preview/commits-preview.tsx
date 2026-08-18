@@ -15,6 +15,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ErrorIcon from "@mui/icons-material/Error";
 import type { ResolvedCommitItem } from "../../../../types";
 import { FlexBox } from "../../../../components/ui/flex-box";
+import { BranchLogButton } from "../../../../features/branch-log";
 import {
   useApplyCommits,
   type ApplyMode,
@@ -122,11 +123,14 @@ export function CommitsPreview({
         sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}
       >
         <Typography variant="h6">{title}</Typography>
-        {commits.length > 0 && (
-          <Typography variant="caption" color="text.secondary">
-            {commits.length} шт.
-          </Typography>
-        )}
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+          {commits.length > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {commits.length} шт.
+            </Typography>
+          )}
+          <BranchLogButton branch={branch ?? applyBranch ?? undefined} />
+        </Stack>
       </Stack>
 
       {(branch || applyBranch) && (

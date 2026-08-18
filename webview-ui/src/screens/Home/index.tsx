@@ -24,6 +24,7 @@ import { styled } from "@mui/material/styles";
 import type { BranchInfo, Language } from "../../types";
 import { useBranches } from "./hooks/useBranches";
 import { useSettingsStore } from "../../state-manager/useSettingsStore";
+import { BranchLogButton } from "../../features/branch-log";
 import { t } from "../../i18n";
 
 const Page = styled(Box)(({ theme }) => ({
@@ -209,6 +210,7 @@ function BranchRow({ branch, language }: BranchRowProps) {
         transition: "background 0.15s",
         "&:hover": { background: "action.hover" },
       }}
+      secondaryAction={<BranchLogButton branch={branch.name} />}
     >
       <ListItemText
         primary={

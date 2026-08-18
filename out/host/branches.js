@@ -9,6 +9,7 @@ exports.safeCherryPick = safeCherryPick;
 exports.safeCherryPickAbort = safeCherryPickAbort;
 exports.safeRevert = safeRevert;
 exports.safeRevertAbort = safeRevertAbort;
+exports.safeListBranchLog = safeListBranchLog;
 const git_1 = require("../git");
 const settings_1 = require("./settings");
 /**
@@ -164,5 +165,19 @@ async function safeRevertAbort() {
         };
     }
     return (0, git_1.revertAbort)(cwd);
+}
+/**
+ * Страница лога ветки (для popup с ленивой подгрузкой).
+ * Пустая `branch` означает текущую HEAD.
+ */
+async function safeListBranchLog(branch, skip, limit) {
+    const cwd = (0, git_1.getWorkspaceCwd)();
+    if (!cwd) {
+        return {
+            ok: false,
+            message: "Open a folder that contains a Git repository.",
+        };
+    }
+    return (0, git_1.listBranchLog)(cwd, branch, skip, limit);
 }
 //# sourceMappingURL=branches.js.map

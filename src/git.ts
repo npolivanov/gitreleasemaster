@@ -449,6 +449,87 @@ export interface CherryPickAbortResult {
   message: string;
 }
 
+/** Одна запись лога ветки (для popup со списком коммитов). */
+export interface BranchLogEntry {
+  /** Полный SHA (ключ записи). */
+  sha: string;
+  /** Короткий SHA. */
+  shortSha: string;
+  /** Первая строка сообщения. */
+  message: string;
+  /** Автор. */
+  author: string;
+  /** ISO-дата. */
+  date: string;
+}
+
+/**
+ * Страница лога ветки. `hasMore` = true, если в ветке есть коммиты глубже
+ * (запрошено limit+1, лишний отброшен) — UI докрутит следующую страницу.
+ */
+export type BranchLogResult =
+  | { ok: true; commits: BranchLogEntry[]; hasMore: boolean }
+  | { ok: false; message: string };
+
+/**
+ * Страница лога ветки: `git log <branch> --skip=N --max-count=L+1`.
+ *
+ * Новые коммиты первыми (стандартный порядок git log). Пустая `branch`
+ * означает текущую HEAD.
+ */
+export async function listBranchLog(
+  cwd: string,
+  branch: string,
+  skip: number,
+  limit: number,
+): Promise<BranchLogResult> {
+  const git = simpleGit({ baseDir: cwd });
+
+  let isRepo = false;
+  try {
+    isRepo = await git.checkIsRepo();
+  } catch {
+    // ignore — treat as not-a-repo
+  }
+  if (!isRepo) {
+    return {
+      ok: false,
+      message: "The open folder is not a Git repository.",
+    };
+  }
+
+  const rev = branch.trim() === "" ? "HEAD" : branch.trim();
+  try {
+    // +1 к limit — чтобы понять, есть ли следующая страница.
+    const out = await git.raw([
+      "log",
+      rev,
+      `--skip=${Math.max(0, skip)}`,
+      `--max-count=${limit + 1}`,
+      "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s",
+    ]);
+
+    const lines = out.trim().split("\n").filter(Boolean);
+    const hasMore = lines.length > limit;
+
+    const commits: BranchLogEntry[] = lines.slice(0, limit).map((line) => {
+      const [sha, shortSha, author, date, message] = line.split("\x1f");
+      return {
+        sha,
+        shortSha,
+        author: author ?? "",
+        date: date ?? "",
+        message: message ?? "",
+      };
+    });
+
+    return { ok: true, commits, hasMore };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, message };
+  }
+}
+
 /** Собрать список конфликтующих файлов из статуса рабочего дерева. */
 async function getConflictedFiles(
   git: ReturnType<typeof simpleGit>,
