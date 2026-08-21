@@ -45,6 +45,10 @@ export function Commits({ releaseCtx }: CommitsProps) {
 
   const handleAdd = () => append({ value: "" });
 
+  /** Массовое добавление из таба «Создать шаблон». */
+  const handleAddMany = (values: string[]) =>
+    append(values.map((value) => ({ value })));
+
   const isDeleteMode = watch("isDeleteMode");
 
   const [resolved, setResolved] = useState<ResolvedCommit>({});
@@ -139,6 +143,7 @@ export function Commits({ releaseCtx }: CommitsProps) {
             remove={remove}
             canRemove={fields.length > 1}
             add={handleAdd}
+            addMany={handleAddMany}
             control={control}
           />
 
