@@ -1,11 +1,12 @@
+# Игнорируем всё, кроме собранных файлов
 .vscode/**
-.vscode-test/**
-src/**
-.gitignore
-.yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
-**/*.map
+.git/**
+node_modules/**
+webview-ui/**
+!webview-ui/dist/**
+!webview-ui/node_modules/**  # <-- ЭТО ВАЖНО: игнорируем ВЕСЬ webview-ui
 **/*.ts
-**/.vscode-test.*
+**/*.tsx
+**/*.map
+*.vsix
+*.tgz

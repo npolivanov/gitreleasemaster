@@ -7,7 +7,6 @@ export default defineConfig({
   build: {
     outDir: "../dist/webview",
     emptyOutDir: true,
-    watch: {},
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name].js`,
