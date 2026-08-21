@@ -25,7 +25,6 @@ export function ScreenRouter({ settings, updateSettings }: ScreenRouterProps) {
           language={settings.language}
           settings={settings}
           updateSettings={updateSettings}
-          themeMode={settings.theme}
         />
       );
     case "createRelease":

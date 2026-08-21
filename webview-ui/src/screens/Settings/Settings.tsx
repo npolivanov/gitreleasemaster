@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   MenuItem,
@@ -14,7 +14,6 @@ import {
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { styled } from "@mui/material/styles";
-import ReactJson from "@microlink/react-json-view";
 import type { Language, Settings, ThemeMode } from "../../types";
 import { t } from "../../i18n";
 
@@ -46,22 +45,29 @@ interface SettingsScreenProps {
   language: Language;
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
-  /** Used to drive react-json-view's own theme. */
-  themeMode: ThemeMode;
 }
 
 export function SettingsScreen({
   language,
   settings,
   updateSettings,
-  themeMode,
 }: SettingsScreenProps) {
   const [tab, setTab] = useState<0 | 1>(0);
 
   return (
     <Page>
       <Box>
-        <Tabs value={tab} onChange={(_, value) => setTab(value as 0 | 1)}>
+        {/* Цвета — адаптивные текстовые, а не primary (#212121): в тёмной
+            теме primary-индикатор и активный лейбл были бы почти невидимы. */}
+        <Tabs
+          value={tab}
+          onChange={(_, value) => setTab(value as 0 | 1)}
+          sx={{
+            "& .MuiTab-root": { color: "text.secondary" },
+            "& .MuiTab-root.Mui-selected": { color: "text.primary" },
+            "& .MuiTabs-indicator": { backgroundColor: "text.primary" },
+          }}
+        >
           <Tab label={t(language, "tabGeneral")} />
           <Tab label={t(language, "tabJson")} />
         </Tabs>
@@ -78,7 +84,6 @@ export function SettingsScreen({
           language={language}
           settings={settings}
           updateSettings={updateSettings}
-          themeMode={themeMode}
         />
       )}
     </Page>
@@ -152,53 +157,107 @@ interface JsonTabProps {
   language: Language;
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
-  themeMode: ThemeMode;
 }
 
-function JsonTab({
-  language,
-  settings,
-  updateSettings,
-  themeMode,
-}: JsonTabProps) {
-  const handleEdit = (next: Partial<Settings>): boolean => {
-    const patch: Partial<Settings> = {};
-    if (
-      typeof next.releasePrefix === "string" &&
-      next.releasePrefix !== settings.releasePrefix
-    ) {
-      patch.releasePrefix = next.releasePrefix;
+/** Каноническая строка настроек с фиксированным порядком ключей — для сравнений. */
+function canon(s: Pick<Settings, "releasePrefix" | "theme" | "language">) {
+  return JSON.stringify({
+    releasePrefix: s.releasePrefix,
+    theme: s.theme,
+    language: s.language,
+  });
+}
+
+/** Разобрать и провалидировать текст как полные настройки. */
+function parseSettings(
+  text: string,
+): { ok: true; value: Settings } | { ok: false; message: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Невалидный JSON: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, message: "Ожидался JSON-объект." };
+  }
+  const o = parsed as Record<string, unknown>;
+  if (typeof o.releasePrefix !== "string") {
+    return { ok: false, message: "releasePrefix должен быть строкой." };
+  }
+  if (o.theme !== "dark" && o.theme !== "light") {
+    return { ok: false, message: 'theme должен быть "dark" или "light".' };
+  }
+  if (o.language !== "ru" && o.language !== "en") {
+    return { ok: false, message: 'language должен быть "ru" или "en".' };
+  }
+  return {
+    ok: true,
+    value: {
+      releasePrefix: o.releasePrefix,
+      theme: o.theme,
+      language: o.language,
+    },
+  };
+}
+
+function JsonTab({ language, settings, updateSettings }: JsonTabProps) {
+  const [text, setText] = useState(() => JSON.stringify(settings, null, 2));
+  const [error, setError] = useState<string | null>(null);
+
+  // Последнее применённое значение — чтобы эхо хоста (settingsUpdated) не
+  // перезатирало текст, который мы сами только что отправили.
+  const lastAppliedRef = useRef(canon(settings));
+
+  // Внешнее изменение настроек (General-таб или конфиг VS Code) — обновляем текст.
+  useEffect(() => {
+    if (canon(settings) !== lastAppliedRef.current) {
+      lastAppliedRef.current = canon(settings);
+      setText(JSON.stringify(settings, null, 2));
+      setError(null);
     }
-    if (next.theme === "dark" || next.theme === "light") {
-      if (next.theme !== settings.theme) patch.theme = next.theme;
-    } else if (next.theme !== undefined) {
-      return false; // reject invalid value, react-json-view will revert
+  }, [settings]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value;
+    setText(next);
+
+    const parsed = parseSettings(next);
+    if (!parsed.ok) {
+      setError(parsed.message);
+      return;
     }
-    if (next.language === "ru" || next.language === "en") {
-      if (next.language !== settings.language) patch.language = next.language;
-    } else if (next.language !== undefined) {
-      return false;
+    setError(null);
+    if (canon(parsed.value) !== lastAppliedRef.current) {
+      lastAppliedRef.current = canon(parsed.value);
+      updateSettings(parsed.value);
     }
-    if (Object.keys(patch).length > 0) updateSettings(patch);
-    return true;
   };
 
   return (
     <FieldCard elevation={0} variant="outlined">
       <FieldHelp sx={{ mt: 0, mb: 1.5 }}>{t(language, "jsonHelp")}</FieldHelp>
-      <Box sx={{ fontSize: 13, fontFamily: "ui-monospace, monospace" }}>
-        <ReactJson
-          src={settings}
-          theme={themeMode === "dark" ? "monokai" : "rjv-default"}
-          collapsed={false}
-          displayDataTypes={false}
-          displayObjectSize={false}
-          enableClipboard={false}
-          onEdit={(args) => handleEdit(args.updated_src as Partial<Settings>)}
-          onAdd={(args) => handleEdit(args.updated_src as Partial<Settings>)}
-          onDelete={(args) => handleEdit(args.updated_src as Partial<Settings>)}
-        />
-      </Box>
+      <TextField
+        fullWidth
+        multiline
+        minRows={10}
+        maxRows={24}
+        size="small"
+        value={text}
+        onChange={handleChange}
+        error={!!error}
+        helperText={error ?? " "}
+        spellCheck={false}
+        sx={{
+          "& .MuiInputBase-input": {
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 13,
+          },
+        }}
+      />
     </FieldCard>
   );
 }
