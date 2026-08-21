@@ -35,6 +35,7 @@ export interface UnstagedCommitsListProps {
   canRemove: boolean;
 
   control: Control<CreateReleaseFormValues, unknown, CreateReleaseFormValues>;
+  loading?: boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ export function UnstagedCommitsList({
   add,
   addMany,
   control,
+  loading,
 }: UnstagedCommitsListProps) {
   const [tab, setTab] = useState<0 | 1>(0);
 
@@ -121,6 +123,17 @@ export function UnstagedCommitsList({
           <Button size="small" startIcon={<AddIcon />} onClick={add}>
             Добавить коммит
           </Button>
+          <Box sx={{ padding: "0 10px", mt: 1 }}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading}
+              sx={{ textTransform: "none" }}
+              size="small"
+            >
+              Добавить
+            </Button>
+          </Box>
         </Box>
       ) : (
         <Box sx={{ marginTop: "10px" }}>

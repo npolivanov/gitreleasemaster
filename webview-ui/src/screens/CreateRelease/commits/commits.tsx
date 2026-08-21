@@ -91,9 +91,7 @@ export function Commits({ releaseCtx }: CommitsProps) {
 
     // Ветвь резолва по режиму: добавление — upstream, удаление — сама
     // релизная ветка (удаляем коммиты из неё, значит и ищем в ней).
-    const branch = data.isDeleteMode
-      ? releaseCtx?.branch
-      : data.upstreamBranch;
+    const branch = data.isDeleteMode ? releaseCtx?.branch : data.upstreamBranch;
 
     if (!branch || branch.trim() === "") {
       setError(
@@ -145,19 +143,8 @@ export function Commits({ releaseCtx }: CommitsProps) {
             add={handleAdd}
             addMany={handleAddMany}
             control={control}
+            loading={loading}
           />
-
-          <Box sx={{ padding: "0 10px", mt: 1 }}>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={loading}
-              sx={{ textTransform: "none" }}
-              size="small"
-            >
-              Добавить
-            </Button>
-          </Box>
         </Box>
 
         <Divider orientation="vertical" flexItem />
